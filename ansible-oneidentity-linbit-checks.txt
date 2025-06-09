@@ -1,0 +1,159 @@
+# OneIdentity vastool and LINBIT Storage (linstore) checks
+# Add these task blocks to the previous server_audit.yml playbook
+
+# OneIdentity vastool Check
+- name: Check OneIdentity vastool
+  block:
+    - name: Check if vastool is installed
+      command: which vastool
+      register: vastool_installed
+      changed_when: false
+      ignore_errors: yes
+      
+    - name: Get vastool version
+      shell: vastool -v
+      register: vastool_version
+      changed_when: false
+      ignore_errors: yes
+      when: vastool_installed is succeeded
+      
+    - name: Check vastool status
+      shell: vastool status
+      register: vastool_status
+      changed_when: false
+      ignore_errors: yes
+      when: vastool_installed is succeeded
+      
+    - name: Check vastool joined domains
+      shell: vastool domains
+      register: vastool_domains
+      changed_when: false
+      ignore_errors: yes
+      when: vastool_installed is succeeded
+      
+    - name: Check vastool license status
+      shell: vastool license -s
+      register: vastool_license
+      changed_when: false
+      ignore_errors: yes
+      when: vastool_installed is succeeded
+      
+    - name: Check host joined status
+      shell: vastool info domain
+      register: vastool_domain_info
+      changed_when: false
+      ignore_errors: yes
+      when: vastool_installed is succeeded
+      
+    - name: Store vastool information
+      set_fact:
+        vastool_info:
+          installed: "{{ vastool_installed is succeeded }}"
+          version: "{{ vastool_version.stdout_lines|default([]) if vastool_installed is succeeded else [] }}"
+          status: "{{ vastool_status.stdout_lines|default([]) if vastool_installed is succeeded else [] }}"
+          domains: "{{ vastool_domains.stdout_lines|default([]) if vastool_installed is succeeded else [] }}"
+          license: "{{ vastool_license.stdout_lines|default([]) if vastool_installed is succeeded else [] }}"
+          domain_info: "{{ vastool_domain_info.stdout_lines|default([]) if vastool_installed is succeeded else [] }}"
+
+# LINBIT Storage (linstore) Check
+- name: Check LINBIT Storage (linstore)
+  block:
+    - name: Check if DRBD is installed
+      command: which drbdadm
+      register: drbd_installed
+      changed_when: false
+      ignore_errors: yes
+      
+    - name: Get DRBD version
+      shell: drbdadm --version
+      register: drbd_version
+      changed_when: false
+      ignore_errors: yes
+      when: drbd_installed is succeeded
+      
+    - name: Check DRBD status
+      shell: drbdadm status
+      register: drbd_status
+      changed_when: false
+      ignore_errors: yes
+      when: drbd_installed is succeeded
+      
+    - name: Check DRBD resources
+      shell: drbdadm dump all
+      register: drbd_resources
+      changed_when: false
+      ignore_errors: yes
+      when: drbd_installed is succeeded
+      
+    - name: Check if linstor is installed
+      command: which linstor
+      register: linstor_installed
+      changed_when: false
+      ignore_errors: yes
+      
+    - name: Get linstor version
+      shell: linstor --version
+      register: linstor_version
+      changed_when: false
+      ignore_errors: yes
+      when: linstor_installed is succeeded
+      
+    - name: Check linstor controller status
+      service:
+        name: linstor-controller
+        state: started
+      register: linstor_controller_status
+      ignore_errors: yes
+      when: linstor_installed is succeeded
+      
+    - name: Check linstor satellite status
+      service:
+        name: linstor-satellite
+        state: started
+      register: linstor_satellite_status
+      ignore_errors: yes
+      when: linstor_installed is succeeded
+      
+    - name: Get linstor node list
+      shell: linstor node list
+      register: linstor_nodes
+      changed_when: false
+      ignore_errors: yes
+      when: linstor_installed is succeeded
+      
+    - name: Get linstor resource list
+      shell: linstor resource list
+      register: linstor_resources
+      changed_when: false
+      ignore_errors: yes
+      when: linstor_installed is succeeded
+      
+    - name: Get linstor storage pool list
+      shell: linstor storage-pool list
+      register: linstor_storage_pools
+      changed_when: false
+      ignore_errors: yes
+      when: linstor_installed is succeeded
+      
+    - name: Get linstor volume list
+      shell: linstor volume list
+      register: linstor_volumes
+      changed_when: false
+      ignore_errors: yes
+      when: linstor_installed is succeeded
+      
+    - name: Store LINBIT Storage information
+      set_fact:
+        linbit_storage_info:
+          drbd_installed: "{{ drbd_installed is succeeded }}"
+          drbd_version: "{{ drbd_version.stdout_lines|default([]) if drbd_installed is succeeded else [] }}"
+          drbd_status: "{{ drbd_status.stdout_lines|default([]) if drbd_installed is succeeded else [] }}"
+          drbd_resources: "{{ drbd_resources.stdout_lines|default([]) if drbd_installed is succeeded else [] }}"
+          linstor_installed: "{{ linstor_installed is succeeded }}"
+          linstor_version: "{{ linstor_version.stdout_lines|default([]) if linstor_installed is succeeded else [] }}"
+          linstor_controller_active: "{{ linstor_controller_status is defined and not linstor_controller_status.failed if linstor_installed is succeeded else false }}"
+          linstor_satellite_active: "{{ linstor_satellite_status is defined and not linstor_satellite_status.failed if linstor_installed is succeeded else false }}"
+          linstor_nodes: "{{ linstor_nodes.stdout_lines|default([]) if linstor_installed is succeeded else [] }}"
+          linstor_resources: "{{ linstor_resources.stdout_lines|default([]) if linstor_installed is succeeded else [] }}"
+          linstor_storage_pools: "{{ linstor_storage_pools.stdout_lines|default([]) if linstor_installed is succeeded else [] }}"
+          linstor_volumes: "{{ linstor_volumes.stdout_lines|default([]) if linstor_installed is succeeded else [] }}"

@@ -1,0 +1,81 @@
+---
+# Ansible playbook to configure PCM resources for floating IP and services
+# floating_ip_pcm.yml
+
+- name: Configure PCM resources for floating IP and associated systemd services
+  hosts: "{{ target_hosts | default('cluster_nodes') }}"
+  become: yes
+  vars:
+    floating_ip: "192.168.1.100"
+    floating_ip_cidr: "24"
+    network_interface: "eth0"
+    resource_group_name: "floating-ip-group"
+    service_names:
+      - "service1"
+      - "service2"
+    
+  tasks:
+    - name: Ensure PCM is installed
+      package:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - pcs
+        - corosync
+        - pacemaker
+      
+    - name: Ensure cluster service is running
+      service:
+        name: pacemaker
+        state: started
+        enabled: yes
+
+    - name: Check if resource group exists
+      shell: pcs resource show {{ resource_group_name }} || echo "NOT_FOUND"
+      register: group_exists
+      changed_when: false
+      
+    - name: Create floating IP resource
+      shell: >
+        pcs resource create floating_ip IPaddr2
+        ip={{ floating_ip }} cidr_netmask={{ floating_ip_cidr }}
+        nic={{ network_interface }} op monitor interval=10s
+      when: "'NOT_FOUND' in group_exists.stdout"
+      
+    - name: Create service resources
+      shell: >
+        pcs resource create {{ item }}_service systemd:{{ item }}
+        op monitor interval=10s op start timeout=100s op stop timeout=100s
+      loop: "{{ service_names }}"
+      when: "'NOT_FOUND' in group_exists.stdout"
+      
+    - name: Create resource group for floating IP and services
+      shell: >
+        pcs resource group add {{ resource_group_name }} floating_ip
+        {% for service in service_names %}{{ service }}_service {% endfor %}
+      when: "'NOT_FOUND' in group_exists.stdout"
+      
+    - name: Set constraints to keep resources together
+      shell: >
+        pcs constraint colocation add {{ resource_group_name }} with INFINITY
+      when: "'NOT_FOUND' in group_exists.stdout"
+      
+    - name: Verify resource status
+      shell: pcs status resources
+      register: pcs_status
+      changed_when: false
+      
+    - name: Display resource status
+      debug:
+        var: pcs_status.stdout_lines
+
+# Optional advanced features
+# -------------------------
+
+    - name: Configure resource stickiness
+      shell: pcs resource meta {{ resource_group_name }} resource-stickiness=100
+      when: enable_stickiness is defined and enable_stickiness
+
+    - name: Configure preferred node
+      shell: pcs constraint location {{ resource_group_name }} prefers {{ preferred_node }}=50
+      when: preferred_node is defined

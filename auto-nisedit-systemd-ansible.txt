@@ -1,0 +1,116 @@
+---
+# File 1: /etc/systemd/system/nisedit-automount-dump.service
+# This systemd service file defines what will be executed when the timer triggers
+[Unit]
+Description=Dump NIS automount maps to local files
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c 'nisedit -d auto.master > /etc/auto.master.nis'
+ExecStart=/bin/bash -c 'nisedit -d auto.home > /etc/auto.home'
+ExecStart=/bin/bash -c 'nisedit -d auto.misc > /etc/auto.misc'
+# Add more maps as needed with additional ExecStart lines
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target
+
+---
+# File 2: /etc/systemd/system/nisedit-automount-dump.timer
+# This systemd timer file defines when the service will be triggered
+[Unit]
+Description=Run NIS automount dump every hour
+Requires=nisedit-automount-dump.service
+
+[Timer]
+Unit=nisedit-automount-dump.service
+OnBootSec=5min
+OnUnitActiveSec=1h
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target
+
+---
+# File 3: Ansible task to install the systemd timer and service
+
+- name: Configure NIS automount dumping via systemd timer
+  hosts: all
+  become: yes
+  tasks:
+    - name: Create directory for script
+      file:
+        path: /usr/local/bin
+        state: directory
+        mode: '0755'
+    
+    - name: Install nisedit-automount-dump service
+      copy:
+        dest: /etc/systemd/system/nisedit-automount-dump.service
+        content: |
+          [Unit]
+          Description=Dump NIS automount maps to local files
+          After=network.target
+
+          [Service]
+          Type=oneshot
+          ExecStart=/bin/bash -c 'nisedit -d auto.master > /etc/auto.master.nis'
+          ExecStart=/bin/bash -c 'nisedit -d auto.home > /etc/auto.home'
+          ExecStart=/bin/bash -c 'nisedit -d auto.misc > /etc/auto.misc'
+          # Add more maps as needed with additional ExecStart lines
+          User=root
+          Group=root
+
+          [Install]
+          WantedBy=multi-user.target
+        owner: root
+        group: root
+        mode: '0644'
+    
+    - name: Install nisedit-automount-dump timer
+      copy:
+        dest: /etc/systemd/system/nisedit-automount-dump.timer
+        content: |
+          [Unit]
+          Description=Run NIS automount dump every hour
+          Requires=nisedit-automount-dump.service
+
+          [Timer]
+          Unit=nisedit-automount-dump.service
+          OnBootSec=5min
+          OnUnitActiveSec=1h
+          AccuracySec=1min
+
+          [Install]
+          WantedBy=timers.target
+        owner: root
+        group: root
+        mode: '0644'
+    
+    - name: Create auto.master include line
+      lineinfile:
+        path: /etc/auto.master
+        line: "+auto.master"
+        state: present
+        backup: yes
+      register: automaster_updated
+    
+    - name: Restart autofs if auto.master was updated
+      service:
+        name: autofs
+        state: restarted
+      when: automaster_updated.changed
+    
+    - name: Enable and start the timer
+      systemd:
+        name: nisedit-automount-dump.timer
+        enabled: yes
+        state: started
+        daemon_reload: yes
+    
+    - name: Run the service once to generate initial files
+      systemd:
+        name: nisedit-automount-dump.service
+        state: started

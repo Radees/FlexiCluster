@@ -1,0 +1,7 @@
+# inventory.ini
+[kvm_host]
+kvm-server ansible_host=192.168.1.10 ansible_user=admin
+
+[kvm_host:vars]
+ansible_become=true
+ansible_become_method=sudo

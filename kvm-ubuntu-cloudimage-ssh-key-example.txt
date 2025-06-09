@@ -1,0 +1,13 @@
+---
+# Example task for loading SSH public key from a file instead of hardcoding it
+
+- name: Load SSH public key from file
+  ansible.builtin.slurp:
+    src: "{{ lookup('env', 'HOME') }}/.ssh/id_rsa.pub"
+  register: ssh_public_key_file
+  delegate_to: localhost
+  become: false
+  
+- name: Set vm_ssh_public_key from file contents
+  set_fact:
+    vm_ssh_public_key: "{{ ssh_public_key_file['content'] | b64decode | trim }}"

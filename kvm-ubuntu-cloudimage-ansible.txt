@@ -1,0 +1,188 @@
+---
+# Playbook: Deploy Ubuntu KVM VM using cloud images
+# This playbook deploys a KVM VM using Ubuntu cloud images and cloud-init
+
+- name: Deploy Ubuntu KVM VM with cloud-init
+  hosts: kvm_host
+  become: true
+  vars:
+    # VM specifications
+    vm_name: "ubuntu-vm"
+    vm_hostname: "ubuntu-server"
+    vm_memory_mb: 2048
+    vm_vcpus: 2
+    vm_disk_size_gb: 20
+    
+    # Cloud image settings
+    cloud_image_url: "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img"
+    cloud_image_name: "jammy-server-cloudimg-amd64.img"
+    
+    # Network settings
+    bridge_interface: "virbr0"  # Default libvirt bridge
+    vm_ip_address: "192.168.122.10"
+    vm_netmask: "255.255.255.0"
+    vm_gateway: "192.168.122.1"
+    vm_dns_servers: "8.8.8.8,8.8.4.4"
+    
+    # User settings
+    vm_user: "flexiadmin"
+    vm_password: "StrongPassword123"  # You should use ansible-vault for real passwords
+    
+    # HTTP server settings
+    http_server_port: 8000
+    http_server_dir: "/tmp/cloud-init-serve"
+    
+  tasks:
+    - name: Ensure required packages are installed
+      apt:
+        name:
+          - qemu-kvm
+          - libvirt-daemon-system
+          - virtinst
+          - bridge-utils
+          - python3-libvirt
+          - genisoimage
+          - cloud-utils
+          - cloud-image-utils
+        state: present
+        update_cache: yes
+    
+    - name: Ensure libvirt service is running
+      service:
+        name: libvirtd
+        state: started
+        enabled: yes
+    
+    - name: Create directory for HTTP server
+      file:
+        path: "{{ http_server_dir }}"
+        state: directory
+        mode: '0755'
+    
+    - name: Create images directory
+      file:
+        path: "{{ http_server_dir }}/images"
+        state: directory
+        mode: '0755'
+    
+    - name: Create cloud-init directory
+      file:
+        path: "{{ http_server_dir }}/cloud-init"
+        state: directory
+        mode: '0755'
+    
+    - name: Download Ubuntu cloud image if not already present
+      get_url:
+        url: "{{ cloud_image_url }}"
+        dest: "{{ http_server_dir }}/images/{{ cloud_image_name }}"
+        mode: '0644'
+    
+    - name: Create user-data file for cloud-init
+      copy:
+        dest: "{{ http_server_dir }}/cloud-init/user-data"
+        content: |
+          #cloud-config
+          hostname: {{ vm_hostname }}
+          fqdn: {{ vm_hostname }}.local
+          manage_etc_hosts: true
+          users:
+            - name: {{ vm_user }}
+              passwd: {{ vm_password | password_hash('sha512') }}
+              lock_passwd: false
+              shell: /bin/bash
+              sudo: ALL=(ALL) NOPASSWD:ALL
+              groups: sudo
+              home: /home/{{ vm_user }}
+          chpasswd:
+            expire: false
+          ssh_pwauth: true
+          package_update: true
+          package_upgrade: true
+        mode: '0644'
+    
+    - name: Create meta-data file for cloud-init
+      copy:
+        dest: "{{ http_server_dir }}/cloud-init/meta-data"
+        content: |
+          instance-id: {{ vm_name }}
+          local-hostname: {{ vm_hostname }}
+        mode: '0644'
+    
+    - name: Create network-config file for cloud-init
+      copy:
+        dest: "{{ http_server_dir }}/cloud-init/network-config"
+        content: |
+          version: 2
+          ethernets:
+            enp1s0:
+              dhcp4: no
+              addresses: [{{ vm_ip_address }}/24]
+              gateway4: {{ vm_gateway }}
+              nameservers:
+                addresses: [{{ vm_dns_servers }}]
+        mode: '0644'
+    
+    - name: Start HTTP server in background
+      shell: |
+        cd {{ http_server_dir }} && nohup python3 -m http.server {{ http_server_port }} > /dev/null 2>&1 &
+        echo $! > /tmp/http_server.pid
+      args:
+        creates: /tmp/http_server.pid
+    
+    - name: Create a working copy of the cloud image
+      copy:
+        src: "{{ http_server_dir }}/images/{{ cloud_image_name }}"
+        dest: "/var/lib/libvirt/images/{{ vm_name }}.qcow2"
+        remote_src: yes
+        mode: '0644'
+    
+    - name: Resize the disk image
+      command: qemu-img resize /var/lib/libvirt/images/{{ vm_name }}.qcow2 {{ vm_disk_size_gb }}G
+    
+    - name: Create cloud-init ISO
+      shell: |
+        cloud-localds -v \
+          --network-config={{ http_server_dir }}/cloud-init/network-config \
+          /var/lib/libvirt/images/{{ vm_name }}-seed.iso \
+          {{ http_server_dir }}/cloud-init/user-data \
+          {{ http_server_dir }}/cloud-init/meta-data
+    
+    - name: Define and start the VM
+      shell: |
+        virt-install \
+          --name {{ vm_name }} \
+          --memory {{ vm_memory_mb }} \
+          --vcpus {{ vm_vcpus }} \
+          --disk path=/var/lib/libvirt/images/{{ vm_name }}.qcow2,format=qcow2 \
+          --disk path=/var/lib/libvirt/images/{{ vm_name }}-seed.iso,device=cdrom \
+          --os-variant ubuntu22.04 \
+          --virt-type kvm \
+          --graphics none \
+          --network bridge={{ bridge_interface }},model=virtio \
+          --import \
+          --noautoconsole
+    
+    - name: Wait for VM to be running
+      virt:
+        name: "{{ vm_name }}"
+        command: status
+      register: vm_status
+      until: vm_status.status == 'running'
+      retries: 30
+      delay: 2
+    
+    - name: Stop HTTP server
+      shell: |
+        if [ -f /tmp/http_server.pid ]; then
+          kill $(cat /tmp/http_server.pid)
+          rm /tmp/http_server.pid
+        fi
+      ignore_errors: yes
+    
+    - name: Show VM IP address
+      debug:
+        msg: "VM {{ vm_name }} is running with IP address {{ vm_ip_address }}"
+    
+    - name: Show VM connection instructions
+      debug:
+        msg: "You can connect to the VM using: ssh {{ vm_user }}@{{ vm_ip_address }}"

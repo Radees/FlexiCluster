@@ -1,0 +1,80 @@
+SERVER AUDIT REPORT FOR: {{ inventory_hostname }}
+=============================================
+Generated on: {{ ansible_date_time.date }} at {{ ansible_date_time.time }}
+
+NETWORK SETTINGS
+---------------
+IP Configuration:
+{% for line in network_info.ip_config %}
+{{ line }}
+{% endfor %}
+
+Routing Table:
+{% for line in network_info.routing_table %}
+{{ line }}
+{% endfor %}
+
+Open Ports:
+{% for line in network_info.open_ports %}
+{{ line }}
+{% endfor %}
+
+NTP STATUS
+---------
+Chronyd Active: {{ ntp_info.chronyd_active }}
+NTPd Active: {{ ntp_info.ntpd_active }}
+Synchronization Status:
+{% for line in ntp_info.sync_status %}
+{{ line }}
+{% endfor %}
+
+DNS SETTINGS
+-----------
+Resolver Configuration:
+{% for line in dns_info.resolv_conf %}
+{{ line }}
+{% endfor %}
+
+DNS Resolution Test:
+{% for line in dns_info.resolution_test %}
+{{ line }}
+{% endfor %}
+
+AUTHENTICATION SETTINGS
+---------------------
+SSSD Present: {{ auth_info.sssd_present }}
+{% if auth_info.sssd_present %}
+SSSD Configuration:
+{% for line in auth_info.sssd_config %}
+{{ line }}
+{% endfor %}
+{% endif %}
+
+LDAP Present: {{ auth_info.ldap_present }}
+{% if auth_info.ldap_present %}
+LDAP Configuration:
+{% for line in auth_info.ldap_config %}
+{{ line }}
+{% endfor %}
+{% endif %}
+
+USER GROUP MEMBERSHIPS
+--------------------
+Username: {{ user_groups_info.username }}
+Sudo Group Member: {{ user_groups_info.sudo_member }}
+Wheel Group Member: {{ user_groups_info.wheel_member }}
+Libvirt Group Member: {{ user_groups_info.libvirt_member }}
+
+KVM VIRTUAL MACHINES
+------------------
+Libvirtd Active: {{ kvm_info.libvirtd_active }}
+
+VM List:
+{% for line in kvm_info.vm_list %}
+{{ line }}
+{% endfor %}
+
+VM Details:
+{% for line in kvm_info.vm_details %}
+{{ line }}
+{% endfor %}

@@ -1,0 +1,82 @@
+ONEIDENTITY VASTOOL STATUS
+-------------------------
+Installed: {{ vastool_info.installed }}
+{% if vastool_info.installed %}
+Version:
+{% for line in vastool_info.version %}
+{{ line }}
+{% endfor %}
+
+Status:
+{% for line in vastool_info.status %}
+{{ line }}
+{% endfor %}
+
+Domains:
+{% for line in vastool_info.domains %}
+{{ line }}
+{% endfor %}
+
+License Status:
+{% for line in vastool_info.license %}
+{{ line }}
+{% endfor %}
+
+Domain Information:
+{% for line in vastool_info.domain_info %}
+{{ line }}
+{% endfor %}
+{% endif %}
+
+LINBIT STORAGE STATUS
+-------------------
+DRBD Information:
+  Installed: {{ linbit_storage_info.drbd_installed }}
+{% if linbit_storage_info.drbd_installed %}
+  Version:
+{% for line in linbit_storage_info.drbd_version %}
+  {{ line }}
+{% endfor %}
+
+  Status:
+{% for line in linbit_storage_info.drbd_status %}
+  {{ line }}
+{% endfor %}
+
+  Resources Configuration:
+{% for line in linbit_storage_info.drbd_resources %}
+  {{ line }}
+{% endfor %}
+{% endif %}
+
+LINSTOR Information:
+  Installed: {{ linbit_storage_info.linstor_installed }}
+{% if linbit_storage_info.linstor_installed %}
+  Version:
+{% for line in linbit_storage_info.linstor_version %}
+  {{ line }}
+{% endfor %}
+
+  Controller Active: {{ linbit_storage_info.linstor_controller_active }}
+  Satellite Active: {{ linbit_storage_info.linstor_satellite_active }}
+  
+  Nodes:
+{% for line in linbit_storage_info.linstor_nodes %}
+  {{ line }}
+{% endfor %}
+
+  Resources:
+{% for line in linbit_storage_info.linstor_resources %}
+  {{ line }}
+{% endfor %}
+
+  Storage Pools:
+{% for line in linbit_storage_info.linstor_storage_pools %}
+  {{ line }}
+{% endfor %}
+
+  Volumes:
+{% for line in linbit_storage_info.linstor_volumes %}
+  {{ line }}
+{% endfor %}
+{% endif %}

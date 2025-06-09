@@ -1,0 +1,212 @@
+---
+# server_audit.yml - Comprehensive server audit playbook
+# This playbook checks critical server configurations including:
+# - Network settings
+# - NTP status
+# - DNS settings
+# - Authentication settings
+# - User group memberships
+# - KVM virtual machine inventory
+
+- name: Server Configuration Audit
+  hosts: cluster_nodes
+  become: yes
+  gather_facts: yes
+  
+  tasks:
+    # Network Settings Check
+    - name: Gather network information
+      block:
+        - name: Get IP configuration
+          command: ip addr
+          register: ip_config
+          changed_when: false
+          
+        - name: Get routing table
+          command: ip route
+          register: routing_table
+          changed_when: false
+          
+        - name: Get open ports
+          shell: ss -tuln
+          register: open_ports
+          changed_when: false
+          
+        - name: Store network information
+          set_fact:
+            network_info:
+              ip_config: "{{ ip_config.stdout_lines }}"
+              routing_table: "{{ routing_table.stdout_lines }}"
+              open_ports: "{{ open_ports.stdout_lines }}"
+              
+    # NTP Status Check
+    - name: Check NTP status
+      block:
+        - name: Check if chronyd is running
+          service:
+            name: chronyd
+            state: started
+          register: chronyd_status
+          ignore_errors: yes
+          
+        - name: Check if ntpd is running
+          service:
+            name: ntpd
+            state: started
+          register: ntpd_status
+          ignore_errors: yes
+          
+        - name: Get NTP synchronization status
+          shell: chronyc tracking || ntpq -p
+          register: ntp_sync
+          changed_when: false
+          ignore_errors: yes
+          
+        - name: Store NTP information
+          set_fact:
+            ntp_info:
+              chronyd_active: "{{ chronyd_status is defined and not chronyd_status.failed }}"
+              ntpd_active: "{{ ntpd_status is defined and not ntpd_status.failed }}"
+              sync_status: "{{ ntp_sync.stdout_lines | default([]) }}"
+              
+    # DNS Settings Check
+    - name: Check DNS configuration
+      block:
+        - name: Get DNS resolver configuration
+          command: cat /etc/resolv.conf
+          register: resolv_conf
+          changed_when: false
+          
+        - name: Test DNS resolution
+          shell: "for d in google.com example.com; do dig +short $d || echo \"Failed to resolve $d\"; done"
+          register: dns_test
+          changed_when: false
+          
+        - name: Store DNS information
+          set_fact:
+            dns_info:
+              resolv_conf: "{{ resolv_conf.stdout_lines }}"
+              resolution_test: "{{ dns_test.stdout_lines }}"
+              
+    # Authentication Settings Check
+    - name: Check authentication settings
+      block:
+        - name: Check PAM configuration
+          shell: find /etc/pam.d -type f -exec grep -l "auth" {} \; | xargs cat
+          register: pam_config
+          changed_when: false
+          ignore_errors: yes
+          
+        - name: Check SSSD configuration
+          stat:
+            path: /etc/sssd/sssd.conf
+          register: sssd_conf
+          
+        - name: Get SSSD configuration details
+          command: cat /etc/sssd/sssd.conf
+          register: sssd_content
+          when: sssd_conf.stat.exists
+          changed_when: false
+          ignore_errors: yes
+          
+        - name: Check for LDAP configuration
+          stat:
+            path: /etc/openldap/ldap.conf
+          register: ldap_conf
+          
+        - name: Get LDAP configuration details
+          command: cat /etc/openldap/ldap.conf
+          register: ldap_content
+          when: ldap_conf.stat.exists
+          changed_when: false
+          ignore_errors: yes
+          
+        - name: Store authentication information
+          set_fact:
+            auth_info:
+              pam_config: "{{ pam_config.stdout_lines | default([]) }}"
+              sssd_present: "{{ sssd_conf.stat.exists | default(false) }}"
+              sssd_config: "{{ sssd_content.stdout_lines | default([]) if sssd_conf.stat.exists | default(false) else [] }}"
+              ldap_present: "{{ ldap_conf.stat.exists | default(false) }}"
+              ldap_config: "{{ ldap_content.stdout_lines | default([]) if ldap_conf.stat.exists | default(false) else [] }}"
+              
+    # User Group Membership Check
+    - name: Get specific user group memberships
+      block:
+        - name: Get target username
+          set_fact:
+            target_user: "{{ lookup('env', 'USER') | default('root') }}"
+          
+        - name: Check sudo group membership
+          shell: "groups {{ target_user }} | grep -q sudo && echo 'yes' || echo 'no'"
+          register: sudo_membership
+          changed_when: false
+          ignore_errors: yes
+          
+        - name: Check wheel group membership
+          shell: "groups {{ target_user }} | grep -q wheel && echo 'yes' || echo 'no'"
+          register: wheel_membership
+          changed_when: false
+          ignore_errors: yes
+          
+        - name: Check libvirt group membership
+          shell: "groups {{ target_user }} | grep -q libvirt && echo 'yes' || echo 'no'"
+          register: libvirt_membership
+          changed_when: false
+          ignore_errors: yes
+          
+        - name: Store user group information
+          set_fact:
+            user_groups_info:
+              username: "{{ target_user }}"
+              sudo_member: "{{ sudo_membership.stdout == 'yes' }}"
+              wheel_member: "{{ wheel_membership.stdout == 'yes' }}"
+              libvirt_member: "{{ libvirt_membership.stdout == 'yes' }}"
+              
+    # KVM Virtual Machines Inventory
+    - name: Check KVM virtual machines
+      block:
+        - name: Check if libvirtd is running
+          service:
+            name: libvirtd
+            state: started
+          register: libvirtd_status
+          ignore_errors: yes
+          
+        - name: List running KVM virtual machines
+          shell: "virsh list --all"
+          register: vm_list
+          changed_when: false
+          ignore_errors: yes
+          
+        - name: Get detailed VM information
+          shell: "for vm in $(virsh list --name --all); do virsh dominfo $vm; echo '---'; done"
+          register: vm_details
+          changed_when: false
+          ignore_errors: yes
+          
+        - name: Store KVM virtual machine information
+          set_fact:
+            kvm_info:
+              libvirtd_active: "{{ libvirtd_status is defined and not libvirtd_status.failed }}"
+              vm_list: "{{ vm_list.stdout_lines | default([]) }}"
+              vm_details: "{{ vm_details.stdout_lines | default([]) }}"
+    
+    # Generate final report
+    - name: Create audit report directory
+      file:
+        path: /tmp/server_audit
+        state: directory
+        mode: '0755'
+      delegate_to: localhost
+      run_once: true
+        
+    - name: Generate audit report
+      template:
+        src: server_audit_report.j2
+        dest: "/tmp/server_audit/{{ inventory_hostname }}_audit.txt"
+      delegate_to: localhost
+      
+    - name: Show summary
+      debug:
+        msg: "Server audit completed for {{ inventory_hostname }}. Report saved to /tmp/server_audit/{{ inventory_hostname }}_audit.txt"

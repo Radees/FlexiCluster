@@ -1,0 +1,30 @@
+# roles/kvm-ubuntu-vm/defaults/main.yml
+
+# VM specifications
+vm_name: "ubuntu-vm"
+vm_hostname: "ubuntu-server"
+vm_memory_mb: 2048
+vm_vcpus: 2
+vm_disk_size_gb: 20
+vm_disk_type: "qcow2"  # Options: qcow2, raw, device (for direct device mapping)
+vm_device_path: "/dev/sdb"  # Only used when vm_disk_type is 'device'
+
+# Cloud image settings
+cloud_image_url: "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img"
+cloud_image_name: "jammy-server-cloudimg-amd64.img"
+
+# Network settings
+bridge_interface: "virbr0"  # Default libvirt bridge
+vm_ip_address: "192.168.122.10"
+vm_cidr_prefix: "24"  # CIDR notation (e.g., 24 for /24 or 255.255.255.0)
+vm_netmask: "255.255.255.0"
+vm_gateway: "192.168.122.1"
+vm_dns_servers: "8.8.8.8,8.8.4.4"
+
+# User settings
+vm_user: "flexiadmin"
+vm_password: "StrongPassword123"  # You should use ansible-vault for this in production
+
+# HTTP server settings
+http_server_port: 8000
+http_server_dir: "/tmp/cloud-init-serve"

@@ -1,0 +1,108 @@
+---
+# VM Host Finder Playbook
+# This playbook identifies which server hosts a specific VM in running state,
+# or which server has the DRBD disk in Primary status if VM is not running
+
+- name: Identify VM host and execute tasks on it
+  hosts: server_group  # Replace with your actual server group
+  gather_facts: true
+  become: true
+  vars:
+    vm_name: "your_vm_name"  # Replace with your VM name
+    host_found: false
+    vm_host: ""
+
+  tasks:
+    - name: Set fact to track if host is found
+      set_fact:
+        host_found: false
+      run_once: true
+      delegate_to: localhost
+
+    - name: Check if VM is running on any host using virsh
+      shell: virsh list --name | grep -w "{{ vm_name }}"
+      register: virsh_result
+      ignore_errors: true
+      changed_when: false
+
+    - name: Mark host if VM is running on it
+      set_fact:
+        vm_host: "{{ inventory_hostname }}"
+        host_found: true
+      when: virsh_result.stdout | trim == vm_name
+
+    - name: Verify VM state - get running status
+      shell: virsh domstate "{{ vm_name }}"
+      register: domstate_result
+      ignore_errors: true
+      changed_when: false
+      when: virsh_result.stdout | trim == vm_name
+
+    - name: Confirm host if VM is in running state
+      set_fact:
+        host_found: "{{ domstate_result.stdout | trim == 'running' }}"
+        vm_host: "{{ inventory_hostname if domstate_result.stdout | trim == 'running' else '' }}"
+      when: virsh_result.stdout | trim == vm_name
+
+    - name: Aggregate VM host information
+      set_fact:
+        global_vm_host: "{{ vm_host }}"
+        global_host_found: "{{ host_found }}"
+      delegate_to: localhost
+      run_once: true
+      when: host_found | bool
+
+    - name: Check DRBD resources if VM not found running
+      shell: ls -l /dev/drbd/by-res/ | grep -w "{{ vm_name }}"
+      register: drbd_result
+      ignore_errors: true
+      changed_when: false
+      when: not (global_host_found | default(false))
+
+    - name: Check DRBD disk status if resource exists
+      shell: drbdadm status "{{ vm_name }}" | grep -w "Primary"
+      register: drbd_status
+      ignore_errors: true
+      changed_when: false
+      when: not (global_host_found | default(false)) and drbd_result.rc == 0
+
+    - name: Mark host if DRBD disk is in Primary status
+      set_fact:
+        vm_host: "{{ inventory_hostname }}"
+        host_found: true
+      delegate_to: localhost
+      run_once: true
+      when: 
+        - not (global_host_found | default(false))
+        - drbd_result.rc == 0
+        - drbd_status.rc == 0
+
+    - name: Display host information
+      debug:
+        msg: "VM {{ vm_name }} found on host: {{ vm_host }}"
+      delegate_to: localhost
+      run_once: true
+      when: host_found | bool
+
+    - name: Fail if VM host not found
+      fail:
+        msg: "Could not find a host for VM {{ vm_name }}"
+      delegate_to: localhost
+      run_once: true
+      when: not (global_host_found | default(false)) and not (host_found | default(false))
+
+    # Additional tasks to run on the identified VM host
+    - name: Perform tasks on the identified VM host
+      block:
+        # Example task - replace with your actual tasks
+        - name: Example task - Check VM status
+          shell: virsh dominfo "{{ vm_name }}"
+          register: vm_info
+          
+        - name: Display VM info
+          debug:
+            var: vm_info.stdout_lines
+            
+        # Add more tasks here that should run on the identified host
+        
+      when: inventory_hostname == vm_host and host_found | bool

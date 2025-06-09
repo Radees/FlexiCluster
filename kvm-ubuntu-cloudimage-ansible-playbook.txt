@@ -1,0 +1,274 @@
+---
+# Playbook: Deploy Ubuntu KVM VM using cloud images
+# This playbook deploys a KVM VM using Ubuntu cloud images and cloud-init
+
+- name: Deploy Ubuntu KVM VM with cloud-init
+  hosts: kvm_host
+  become: true
+  vars:
+    # VM specifications
+    vm_name: "ubuntu-vm"
+    vm_hostname: "ubuntu-server"
+    vm_memory_mb: 2048
+    vm_vcpus: 2
+    vm_disk_size_gb: 20
+    vm_disk_type: "qcow2"  # Options: qcow2, raw, device (for direct device mapping)
+    vm_device_path: "/dev/sdb"  # Only used when vm_disk_type is 'device'
+    
+    # Cloud image settings
+    cloud_image_url: "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img"
+    cloud_image_name: "jammy-server-cloudimg-amd64.img"
+    
+    # User settings
+    vm_user: "flexiadmin"
+    vm_password: "StrongPassword123"  # You should use ansible-vault for real passwords
+    vm_ssh_public_key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC..."  # Replace with your actual SSH public key
+    
+    # NTP settings
+    vm_ntp_servers:
+      - "0.ubuntu.pool.ntp.org"
+      - "1.ubuntu.pool.ntp.org"
+      - "2.ubuntu.pool.ntp.org"
+      - "3.ubuntu.pool.ntp.org"
+    
+    # Network settings
+    bridge_interface: "virbr0"  # Default libvirt bridge
+    vm_ip_address: "192.168.122.10"
+    vm_cidr_prefix: "24"  # CIDR notation (e.g., 24 for /24 or 255.255.255.0)
+    vm_netmask: "255.255.255.0"
+    vm_gateway: "192.168.122.1"
+    vm_dns_servers: "8.8.8.8,8.8.4.4"
+    vm_dns_search_domains: "localdomain lan"  # Space-separated list of search domains
+    
+    # HTTP server settings
+    http_server_port: 8000
+    http_server_dir: "/tmp/cloud-init-serve"
+    
+  tasks:
+    - name: Ensure required packages are installed
+      apt:
+        name:
+          - qemu-kvm
+          - libvirt-daemon-system
+          - virtinst
+          - bridge-utils
+          - python3-libvirt
+          - genisoimage
+          - cloud-utils
+          - cloud-image-utils
+        state: present
+        update_cache: yes
+    
+    - name: Ensure libvirt service is running
+      service:
+        name: libvirtd
+        state: started
+        enabled: yes
+    
+    - name: Create directory for HTTP server
+      file:
+        path: "{{ http_server_dir }}"
+        state: directory
+        mode: '0755'
+    
+    - name: Create images directory
+      file:
+        path: "{{ http_server_dir }}/images"
+        state: directory
+        mode: '0755'
+    
+    - name: Create cloud-init directory
+      file:
+        path: "{{ http_server_dir }}/cloud-init"
+        state: directory
+        mode: '0755'
+    
+    - name: Download Ubuntu cloud image if not already present
+      get_url:
+        url: "{{ cloud_image_url }}"
+        dest: "{{ http_server_dir }}/images/{{ cloud_image_name }}"
+        mode: '0644'
+    
+    - name: Create user-data file for cloud-init
+      copy:
+        dest: "{{ http_server_dir }}/cloud-init/user-data"
+        content: |
+          #cloud-config
+          hostname: {{ vm_hostname }}
+          fqdn: {{ vm_hostname }}.local
+          manage_etc_hosts: true
+          
+          # User configuration
+          users:
+            - name: {{ vm_user }}
+              passwd: {{ vm_password | password_hash('sha512') }}
+              lock_passwd: false
+              shell: /bin/bash
+              sudo: ALL=(ALL) NOPASSWD:ALL
+              groups: sudo
+              home: /home/{{ vm_user }}
+          {% if vm_ssh_public_key | length > 0 %}
+              ssh_authorized_keys:
+                - {{ vm_ssh_public_key }}
+          {% endif %}
+          
+          chpasswd:
+            expire: false
+          ssh_pwauth: true
+          
+          # Package management
+          package_update: true
+          package_upgrade: true
+          
+          # NTP Configuration
+          ntp:
+            enabled: true
+            servers:
+          {% for server in vm_ntp_servers %}
+              - {{ server }}
+          {% endfor %}
+          
+          # Additional configuration
+          timezone: UTC
+          
+          # Run commands on first boot
+          runcmd:
+            - echo "Cloud-init setup completed" | tee /var/log/cloud-init-setup.log
+        mode: '0644'
+    
+    - name: Create meta-data file for cloud-init
+      copy:
+        dest: "{{ http_server_dir }}/cloud-init/meta-data"
+        content: |
+          instance-id: {{ vm_name }}
+          local-hostname: {{ vm_hostname }}
+        mode: '0644'
+    
+    - name: Create network-config file for cloud-init
+      copy:
+        dest: "{{ http_server_dir }}/cloud-init/network-config"
+        content: |
+          version: 2
+          ethernets:
+            enp1s0:
+              dhcp4: no
+              addresses: [{{ vm_ip_address }}/{{ vm_cidr_prefix }}]
+              gateway4: {{ vm_gateway }}
+              nameservers:
+                addresses: [{{ vm_dns_servers }}]
+                search: [{{ vm_dns_search_domains | replace(' ', ', ') }}]
+        mode: '0644'
+    
+    - name: Start HTTP server in background
+      shell: |
+        cd {{ http_server_dir }} && nohup python3 -m http.server {{ http_server_port }} > /dev/null 2>&1 &
+        echo $! > /tmp/http_server.pid
+      args:
+        creates: /tmp/http_server.pid
+    
+    # Handle disk creation based on disk type
+    - name: Create working directory for VM disk
+      file:
+        path: "/var/lib/libvirt/images"
+        state: directory
+        mode: '0755'
+
+    - name: Create qcow2 disk
+      block:
+        - name: Create a working copy of the cloud image (qcow2)
+          copy:
+            src: "{{ http_server_dir }}/images/{{ cloud_image_name }}"
+            dest: "/var/lib/libvirt/images/{{ vm_name }}.qcow2"
+            remote_src: yes
+            mode: '0644'
+        - name: Resize the qcow2 disk image
+          command: qemu-img resize /var/lib/libvirt/images/{{ vm_name }}.qcow2 {{ vm_disk_size_gb }}G
+      when: vm_disk_type == 'qcow2'
+
+    - name: Create raw disk
+      block:
+        - name: Convert to raw image
+          command: >
+            qemu-img convert -f qcow2 -O raw 
+            {{ http_server_dir }}/images/{{ cloud_image_name }} 
+            /var/lib/libvirt/images/{{ vm_name }}.raw
+        - name: Resize the raw disk image
+          command: qemu-img resize -f raw /var/lib/libvirt/images/{{ vm_name }}.raw {{ vm_disk_size_gb }}G
+      when: vm_disk_type == 'raw'
+
+    - name: Verify device exists when using device type
+      stat:
+        path: "{{ vm_device_path }}"
+      register: device_check
+      when: vm_disk_type == 'device'
+
+    - name: Fail if device doesn't exist
+      fail:
+        msg: "The device {{ vm_device_path }} does not exist"
+      when: vm_disk_type == 'device' and not device_check.stat.exists
+    
+    - name: Create cloud-init ISO
+      shell: |
+        cloud-localds -v \
+          --network-config={{ http_server_dir }}/cloud-init/network-config \
+          /var/lib/libvirt/images/{{ vm_name }}-seed.iso \
+          {{ http_server_dir }}/cloud-init/user-data \
+          {{ http_server_dir }}/cloud-init/meta-data
+    
+    - name: Set VM disk path based on disk type
+      set_fact:
+        vm_disk_path: "/var/lib/libvirt/images/{{ vm_name }}.qcow2"
+        vm_disk_format: "qcow2"
+      when: vm_disk_type == 'qcow2'
+
+    - name: Set VM disk path for raw disk
+      set_fact:
+        vm_disk_path: "/var/lib/libvirt/images/{{ vm_name }}.raw"
+        vm_disk_format: "raw"
+      when: vm_disk_type == 'raw'
+
+    - name: Set VM disk path for device
+      set_fact:
+        vm_disk_path: "{{ vm_device_path }}"
+        vm_disk_format: "raw"
+      when: vm_disk_type == 'device'
+
+    - name: Define and start the VM
+      shell: |
+        virt-install \
+          --name {{ vm_name }} \
+          --memory {{ vm_memory_mb }} \
+          --vcpus {{ vm_vcpus }} \
+          --disk path={{ vm_disk_path }},format={{ vm_disk_format }} \
+          --disk path=/var/lib/libvirt/images/{{ vm_name }}-seed.iso,device=cdrom \
+          --os-variant ubuntu22.04 \
+          --virt-type kvm \
+          --graphics none \
+          --network bridge={{ bridge_interface }},model=virtio \
+          --import \
+          --noautoconsole
+    
+    - name: Wait for VM to be running
+      virt:
+        name: "{{ vm_name }}"
+        command: status
+      register: vm_status
+      until: vm_status.status == 'running'
+      retries: 30
+      delay: 2
+    
+    - name: Stop HTTP server
+      shell: |
+        if [ -f /tmp/http_server.pid ]; then
+          kill $(cat /tmp/http_server.pid)
+          rm /tmp/http_server.pid
+        fi
+      ignore_errors: yes
+    
+    - name: Show VM IP address
+      debug:
+        msg: "VM {{ vm_name }} is running with IP address {{ vm_ip_address }}"
+    
+    - name: Show VM connection instructions
+      debug:
+        msg: "You can connect to the VM using: ssh {{ vm_user }}@{{ vm_ip_address }}"
