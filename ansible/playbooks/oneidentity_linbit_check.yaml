@@ -1,0 +1,357 @@
+---
+# ============================================================================
+# OneIdentity and LINBIT Storage Check Playbook
+# ============================================================================
+# Description: Comprehensive checks for OneIdentity vastool and LINBIT Storage
+# Purpose: Performs detailed checks on:
+#          - OneIdentity vastool installation and configuration
+#          - Domain join status and licensing
+#          - DRBD installation and status
+#          - Linstor controller and satellite services
+#          - Storage resources and volumes
+#
+# Usage: ansible-playbook playbooks/oneidentity_linbit_check.yaml
+#        ansible-playbook playbooks/oneidentity_linbit_check.yaml --tags vastool
+#        ansible-playbook playbooks/oneidentity_linbit_check.yaml --tags drbd,linstor
+# ============================================================================
+
+- name: OneIdentity vastool and LINBIT Storage Comprehensive Check
+  hosts: "{{ target_hosts | default('cluster_nodes') }}"
+  become: true
+  gather_facts: true
+
+  vars:
+    report_directory: /tmp/vastool_linbit_reports
+    generate_report: true
+
+  tasks:
+    # ========================================
+    # OneIdentity vastool Check
+    # ========================================
+    - name: Check OneIdentity vastool
+      tags: [vastool, identity, auth]
+      block:
+        - name: Check if vastool is installed
+          ansible.builtin.command: which vastool
+          register: vastool_installed
+          changed_when: false
+          ignore_errors: true
+
+        - name: Get vastool version
+          ansible.builtin.shell: vastool -v
+          register: vastool_version
+          changed_when: false
+          ignore_errors: true
+          when: vastool_installed is succeeded
+
+        - name: Check vastool status
+          ansible.builtin.shell: vastool status
+          register: vastool_status
+          changed_when: false
+          ignore_errors: true
+          when: vastool_installed is succeeded
+
+        - name: Check vastool joined domains
+          ansible.builtin.shell: vastool domains
+          register: vastool_domains
+          changed_when: false
+          ignore_errors: true
+          when: vastool_installed is succeeded
+
+        - name: Check vastool license status
+          ansible.builtin.shell: vastool license -s
+          register: vastool_license
+          changed_when: false
+          ignore_errors: true
+          when: vastool_installed is succeeded
+
+        - name: Check host joined status
+          ansible.builtin.shell: vastool info domain
+          register: vastool_domain_info
+          changed_when: false
+          ignore_errors: true
+          when: vastool_installed is succeeded
+
+        - name: Get vastool configuration
+          ansible.builtin.shell: vastool info config
+          register: vastool_config
+          changed_when: false
+          ignore_errors: true
+          when: vastool_installed is succeeded
+
+        - name: Check vastool users cache
+          ansible.builtin.shell: vastool list users | head -20
+          register: vastool_users
+          changed_when: false
+          ignore_errors: true
+          when: vastool_installed is succeeded
+
+        - name: Check vastool groups cache
+          ansible.builtin.shell: vastool list groups | head -20
+          register: vastool_groups
+          changed_when: false
+          ignore_errors: true
+          when: vastool_installed is succeeded
+
+        - name: Store vastool information
+          ansible.builtin.set_fact:
+            vastool_info:
+              installed: "{{ vastool_installed is succeeded }}"
+              version: "{{ vastool_version.stdout_lines | default([]) if vastool_installed is succeeded else [] }}"
+              status: "{{ vastool_status.stdout_lines | default([]) if vastool_installed is succeeded else [] }}"
+              domains: "{{ vastool_domains.stdout_lines | default([]) if vastool_installed is succeeded else [] }}"
+              license: "{{ vastool_license.stdout_lines | default([]) if vastool_installed is succeeded else [] }}"
+              domain_info: "{{ vastool_domain_info.stdout_lines | default([]) if vastool_installed is succeeded else [] }}"
+              config: "{{ vastool_config.stdout_lines | default([]) if vastool_installed is succeeded else [] }}"
+              cached_users: "{{ vastool_users.stdout_lines | default([]) if vastool_installed is succeeded else [] }}"
+              cached_groups: "{{ vastool_groups.stdout_lines | default([]) if vastool_installed is succeeded else [] }}"
+
+        - name: Display vastool summary
+          ansible.builtin.debug:
+            msg: |
+              OneIdentity vastool Status on {{ inventory_hostname }}:
+              - Installed: {{ vastool_info.installed }}
+              {% if vastool_info.installed %}
+              - Version: {{ vastool_version.stdout | default('Unknown') }}
+              - Domains: {{ vastool_info.domains | length }} domain(s) found
+              - License: {{ 'Active' if vastool_license is succeeded else 'Check Failed' }}
+              {% else %}
+              - OneIdentity vastool is not installed
+              {% endif %}
+
+      rescue:
+        - name: Log vastool check failure
+          ansible.builtin.debug:
+            msg: "OneIdentity vastool check encountered errors on {{ inventory_hostname }}"
+
+    # ========================================
+    # DRBD Check
+    # ========================================
+    - name: Check DRBD (Distributed Replicated Block Device)
+      tags: [drbd, storage, linbit]
+      block:
+        - name: Check if DRBD is installed
+          ansible.builtin.command: which drbdadm
+          register: drbd_installed
+          changed_when: false
+          ignore_errors: true
+
+        - name: Get DRBD version
+          ansible.builtin.shell: drbdadm --version
+          register: drbd_version
+          changed_when: false
+          ignore_errors: true
+          when: drbd_installed is succeeded
+
+        - name: Check DRBD kernel module
+          ansible.builtin.shell: lsmod | grep drbd
+          register: drbd_module
+          changed_when: false
+          ignore_errors: true
+          when: drbd_installed is succeeded
+
+        - name: Check DRBD status
+          ansible.builtin.shell: drbdadm status
+          register: drbd_status
+          changed_when: false
+          ignore_errors: true
+          when: drbd_installed is succeeded
+
+        - name: Check DRBD resources configuration
+          ansible.builtin.shell: drbdadm dump all
+          register: drbd_resources
+          changed_when: false
+          ignore_errors: true
+          when: drbd_installed is succeeded
+
+        - name: Get DRBD connection state
+          ansible.builtin.shell: cat /proc/drbd
+          register: drbd_proc
+          changed_when: false
+          ignore_errors: true
+          when: drbd_installed is succeeded
+
+        - name: List DRBD devices
+          ansible.builtin.shell: ls -l /dev/drbd* 2>/dev/null || echo "No DRBD devices found"
+          register: drbd_devices
+          changed_when: false
+          when: drbd_installed is succeeded
+
+        - name: Store DRBD information
+          ansible.builtin.set_fact:
+            drbd_info:
+              installed: "{{ drbd_installed is succeeded }}"
+              version: "{{ drbd_version.stdout_lines | default([]) if drbd_installed is succeeded else [] }}"
+              module_loaded: "{{ drbd_module is succeeded and drbd_module.stdout | length > 0 }}"
+              status: "{{ drbd_status.stdout_lines | default([]) if drbd_installed is succeeded else [] }}"
+              resources: "{{ drbd_resources.stdout_lines | default([]) if drbd_installed is succeeded else [] }}"
+              proc_info: "{{ drbd_proc.stdout_lines | default([]) if drbd_installed is succeeded else [] }}"
+              devices: "{{ drbd_devices.stdout_lines | default([]) if drbd_installed is succeeded else [] }}"
+
+        - name: Display DRBD summary
+          ansible.builtin.debug:
+            msg: |
+              DRBD Status on {{ inventory_hostname }}:
+              - Installed: {{ drbd_info.installed }}
+              {% if drbd_info.installed %}
+              - Module Loaded: {{ drbd_info.module_loaded }}
+              - Resources: {{ drbd_info.resources | length }} lines of configuration
+              - Status: {{ 'Active' if drbd_status is succeeded else 'Inactive/Error' }}
+              {% else %}
+              - DRBD is not installed
+              {% endif %}
+
+      rescue:
+        - name: Log DRBD check failure
+          ansible.builtin.debug:
+            msg: "DRBD check encountered errors on {{ inventory_hostname }}"
+
+    # ========================================
+    # Linstor Check
+    # ========================================
+    - name: Check Linstor Storage Management
+      tags: [linstor, storage, linbit]
+      block:
+        - name: Check if linstor is installed
+          ansible.builtin.command: which linstor
+          register: linstor_installed
+          changed_when: false
+          ignore_errors: true
+
+        - name: Get linstor version
+          ansible.builtin.shell: linstor --version
+          register: linstor_version
+          changed_when: false
+          ignore_errors: true
+          when: linstor_installed is succeeded
+
+        - name: Check linstor controller status
+          ansible.builtin.systemd:
+            name: linstor-controller
+          register: linstor_controller_status
+          ignore_errors: true
+          when: linstor_installed is succeeded
+
+        - name: Check linstor satellite status
+          ansible.builtin.systemd:
+            name: linstor-satellite
+          register: linstor_satellite_status
+          ignore_errors: true
+          when: linstor_installed is succeeded
+
+        - name: Get linstor node list
+          ansible.builtin.shell: linstor node list
+          register: linstor_nodes
+          changed_when: false
+          ignore_errors: true
+          when: linstor_installed is succeeded
+
+        - name: Get linstor resource definitions
+          ansible.builtin.shell: linstor resource-definition list
+          register: linstor_resource_defs
+          changed_when: false
+          ignore_errors: true
+          when: linstor_installed is succeeded
+
+        - name: Get linstor resource list
+          ansible.builtin.shell: linstor resource list
+          register: linstor_resources
+          changed_when: false
+          ignore_errors: true
+          when: linstor_installed is succeeded
+
+        - name: Get linstor storage pool list
+          ansible.builtin.shell: linstor storage-pool list
+          register: linstor_storage_pools
+          changed_when: false
+          ignore_errors: true
+          when: linstor_installed is succeeded
+
+        - name: Get linstor volume list
+          ansible.builtin.shell: linstor volume list
+          register: linstor_volumes
+          changed_when: false
+          ignore_errors: true
+          when: linstor_installed is succeeded
+
+        - name: Get linstor error reports
+          ansible.builtin.shell: linstor error-reports list
+          register: linstor_errors
+          changed_when: false
+          ignore_errors: true
+          when: linstor_installed is succeeded
+
+        - name: Store Linstor information
+          ansible.builtin.set_fact:
+            linstor_info:
+              installed: "{{ linstor_installed is succeeded }}"
+              version: "{{ linstor_version.stdout_lines | default([]) if linstor_installed is succeeded else [] }}"
+              controller_active: "{{ linstor_controller_status.status.ActiveState | default('unknown') if linstor_installed is succeeded else 'not_installed' }}"
+              satellite_active: "{{ linstor_satellite_status.status.ActiveState | default('unknown') if linstor_installed is succeeded else 'not_installed' }}"
+              nodes: "{{ linstor_nodes.stdout_lines | default([]) if linstor_installed is succeeded else [] }}"
+              resource_definitions: "{{ linstor_resource_defs.stdout_lines | default([]) if linstor_installed is succeeded else [] }}"
+              resources: "{{ linstor_resources.stdout_lines | default([]) if linstor_installed is succeeded else [] }}"
+              storage_pools: "{{ linstor_storage_pools.stdout_lines | default([]) if linstor_installed is succeeded else [] }}"
+              volumes: "{{ linstor_volumes.stdout_lines | default([]) if linstor_installed is succeeded else [] }}"
+              error_reports: "{{ linstor_errors.stdout_lines | default([]) if linstor_installed is succeeded else [] }}"
+
+        - name: Display Linstor summary
+          ansible.builtin.debug:
+            msg: |
+              Linstor Status on {{ inventory_hostname }}:
+              - Installed: {{ linstor_info.installed }}
+              {% if linstor_info.installed %}
+              - Controller: {{ linstor_info.controller_active }}
+              - Satellite: {{ linstor_info.satellite_active }}
+              - Nodes: {{ linstor_info.nodes | length }} line(s)
+              - Resources: {{ linstor_info.resources | length }} line(s)
+              - Storage Pools: {{ linstor_info.storage_pools | length }} line(s)
+              {% else %}
+              - Linstor is not installed
+              {% endif %}
+
+      rescue:
+        - name: Log Linstor check failure
+          ansible.builtin.debug:
+            msg: "Linstor check encountered errors on {{ inventory_hostname }}"
+
+    # ========================================
+    # Generate Report
+    # ========================================
+    - name: Generate comprehensive report
+      tags: [report, always]
+      when: generate_report | bool
+      block:
+        - name: Create report directory
+          ansible.builtin.file:
+            path: "{{ report_directory }}"
+            state: directory
+            mode: '0755'
+          delegate_to: localhost
+          run_once: true
+
+        - name: Generate detailed report
+          ansible.builtin.template:
+            src: ../templates/oneidentity_linbit_report.j2
+            dest: "{{ report_directory }}/{{ inventory_hostname }}_report_{{ ansible_date_time.date }}.txt"
+          delegate_to: localhost
+
+        - name: Display report location
+          ansible.builtin.debug:
+            msg: |
+              Report generated: {{ report_directory }}/{{ inventory_hostname }}_report_{{ ansible_date_time.date }}.txt
+
+    # ========================================
+    # Summary
+    # ========================================
+    - name: Display overall summary
+      tags: [always]
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          {{ inventory_hostname }} - System Summary
+          ============================================
+          OneIdentity vastool: {{ 'Installed' if vastool_info.installed else 'Not Installed' }}
+          DRBD: {{ 'Installed' if drbd_info.installed else 'Not Installed' }}
+          Linstor: {{ 'Installed' if linstor_info.installed else 'Not Installed' }}
+          ============================================

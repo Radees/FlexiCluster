@@ -1,0 +1,25 @@
+---
+# Common variables for all hosts in production
+
+# SSH and connection settings
+ansible_connection: ssh
+ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+
+# Time settings
+timezone: UTC
+ntp_servers:
+  - 0.pool.ntp.org
+  - 1.pool.ntp.org
+  - 2.pool.ntp.org
+
+# Package management
+package_update_cache: true
+package_cache_valid_time: 3600
+
+# Logging
+log_directory: /var/log/ansible
+audit_log_retention_days: 90
+
+# Security settings
+enable_firewall: true
+ssh_port: 22

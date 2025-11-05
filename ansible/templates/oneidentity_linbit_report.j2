@@ -1,0 +1,180 @@
+================================================================================
+ONEIDENTITY AND LINBIT STORAGE REPORT
+================================================================================
+Host: {{ inventory_hostname }}
+IP Address: {{ ansible_host | default(ansible_facts['default_ipv4']['address']) }}
+Date: {{ ansible_date_time.iso8601 }}
+OS: {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}
+================================================================================
+
+ONEIDENTITY VASTOOL DETAILS
+================================================================================
+{% if vastool_info is defined %}
+Installation Status: {{ 'INSTALLED' if vastool_info.installed else 'NOT INSTALLED' }}
+
+{% if vastool_info.installed %}
+Version Information:
+{% for line in vastool_info.version %}
+{{ line }}
+{% endfor %}
+
+Current Status:
+{% for line in vastool_info.status %}
+{{ line }}
+{% endfor %}
+
+Joined Domains:
+{% for line in vastool_info.domains %}
+{{ line }}
+{% endfor %}
+
+License Status:
+{% for line in vastool_info.license %}
+{{ line }}
+{% endfor %}
+
+Domain Information:
+{% for line in vastool_info.domain_info %}
+{{ line }}
+{% endfor %}
+
+Configuration Details:
+{% for line in vastool_info.config %}
+{{ line }}
+{% endfor %}
+
+Cached Users (Sample):
+{% for line in vastool_info.cached_users %}
+{{ line }}
+{% endfor %}
+
+Cached Groups (Sample):
+{% for line in vastool_info.cached_groups %}
+{{ line }}
+{% endfor %}
+{% else %}
+OneIdentity vastool is not installed on this system.
+{% endif %}
+{% else %}
+Vastool information could not be retrieved.
+{% endif %}
+
+================================================================================
+DRBD (DISTRIBUTED REPLICATED BLOCK DEVICE) DETAILS
+================================================================================
+{% if drbd_info is defined %}
+Installation Status: {{ 'INSTALLED' if drbd_info.installed else 'NOT INSTALLED' }}
+
+{% if drbd_info.installed %}
+Module Loaded: {{ 'YES' if drbd_info.module_loaded else 'NO' }}
+
+Version Information:
+{% for line in drbd_info.version %}
+{{ line }}
+{% endfor %}
+
+Current Status:
+{% for line in drbd_info.status %}
+{{ line }}
+{% endfor %}
+
+Resource Configuration:
+{% for line in drbd_info.resources %}
+{{ line }}
+{% endfor %}
+
+/proc/drbd Information:
+{% for line in drbd_info.proc_info %}
+{{ line }}
+{% endfor %}
+
+DRBD Devices:
+{% for line in drbd_info.devices %}
+{{ line }}
+{% endfor %}
+{% else %}
+DRBD is not installed on this system.
+{% endif %}
+{% else %}
+DRBD information could not be retrieved.
+{% endif %}
+
+================================================================================
+LINSTOR STORAGE MANAGEMENT DETAILS
+================================================================================
+{% if linstor_info is defined %}
+Installation Status: {{ 'INSTALLED' if linstor_info.installed else 'NOT INSTALLED' }}
+
+{% if linstor_info.installed %}
+Version Information:
+{% for line in linstor_info.version %}
+{{ line }}
+{% endfor %}
+
+Service Status:
+  - Controller: {{ linstor_info.controller_active }}
+  - Satellite: {{ linstor_info.satellite_active }}
+
+Node List:
+{% for line in linstor_info.nodes %}
+{{ line }}
+{% endfor %}
+
+Resource Definitions:
+{% for line in linstor_info.resource_definitions %}
+{{ line }}
+{% endfor %}
+
+Resources:
+{% for line in linstor_info.resources %}
+{{ line }}
+{% endfor %}
+
+Storage Pools:
+{% for line in linstor_info.storage_pools %}
+{{ line }}
+{% endfor %}
+
+Volumes:
+{% for line in linstor_info.volumes %}
+{{ line }}
+{% endfor %}
+
+Error Reports:
+{% if linstor_info.error_reports | length > 0 %}
+{% for line in linstor_info.error_reports %}
+{{ line }}
+{% endfor %}
+{% else %}
+No error reports found.
+{% endif %}
+{% else %}
+Linstor is not installed on this system.
+{% endif %}
+{% else %}
+Linstor information could not be retrieved.
+{% endif %}
+
+================================================================================
+SUMMARY
+================================================================================
+OneIdentity vastool: {{ 'ACTIVE' if vastool_info.installed and vastool_info.status | length > 0 else 'INACTIVE/NOT INSTALLED' }}
+DRBD: {{ 'ACTIVE' if drbd_info.installed and drbd_info.module_loaded else 'INACTIVE/NOT INSTALLED' }}
+Linstor: {{ 'ACTIVE' if linstor_info.installed and (linstor_info.controller_active == 'active' or linstor_info.satellite_active == 'active') else 'INACTIVE/NOT INSTALLED' }}
+
+{% if vastool_info.installed %}
+Domain Join Status: {{ 'JOINED' if vastool_info.domains | length > 0 else 'NOT JOINED' }}
+{% endif %}
+
+{% if drbd_info.installed %}
+DRBD Resources: {{ drbd_info.resources | length }} lines of configuration
+{% endif %}
+
+{% if linstor_info.installed %}
+Linstor Nodes: {{ linstor_info.nodes | select('match', '.*\\|.*') | list | length }} node(s)
+Linstor Resources: {{ linstor_info.resources | select('match', '.*\\|.*') | list | length }} resource(s)
+{% endif %}
+
+================================================================================
+END OF REPORT
+================================================================================

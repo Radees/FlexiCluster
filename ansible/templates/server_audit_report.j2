@@ -1,0 +1,234 @@
+================================================================================
+SERVER AUDIT REPORT
+================================================================================
+Host: {{ inventory_hostname }}
+IP Address: {{ ansible_host | default(ansible_facts['default_ipv4']['address']) }}
+Date: {{ ansible_date_time.iso8601 }}
+OS: {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}
+Kernel: {{ ansible_facts['kernel'] }}
+================================================================================
+
+NETWORK INFORMATION
+================================================================================
+{% if network_info is defined %}
+IP Configuration:
+{% for line in network_info.ip_config %}
+  {{ line }}
+{% endfor %}
+
+Routing Table:
+{% for line in network_info.routing_table %}
+  {{ line }}
+{% endfor %}
+
+Open Ports:
+{% for line in network_info.open_ports %}
+  {{ line }}
+{% endfor %}
+{% else %}
+Network information not available
+{% endif %}
+
+================================================================================
+NTP/TIME SYNCHRONIZATION
+================================================================================
+{% if ntp_info is defined %}
+Chronyd Active: {{ ntp_info.chronyd_active }}
+NTPd Active: {{ ntp_info.ntpd_active }}
+
+Synchronization Status:
+{% for line in ntp_info.sync_status %}
+  {{ line }}
+{% endfor %}
+{% else %}
+NTP information not available
+{% endif %}
+
+================================================================================
+DNS CONFIGURATION
+================================================================================
+{% if dns_info is defined %}
+Resolver Configuration (/etc/resolv.conf):
+{% for line in dns_info.resolv_conf %}
+  {{ line }}
+{% endfor %}
+
+DNS Resolution Test:
+{% for line in dns_info.resolution_test %}
+  {{ line }}
+{% endfor %}
+{% else %}
+DNS information not available
+{% endif %}
+
+================================================================================
+AUTHENTICATION SETTINGS
+================================================================================
+{% if auth_info is defined %}
+SSSD Present: {{ auth_info.sssd_present }}
+{% if auth_info.sssd_present %}
+SSSD Configuration (excerpt):
+{% for line in auth_info.sssd_config[:20] %}
+  {{ line }}
+{% endfor %}
+{% if auth_info.sssd_config | length > 20 %}
+  ... ({{ auth_info.sssd_config | length - 20 }} more lines)
+{% endif %}
+{% endif %}
+
+LDAP Present: {{ auth_info.ldap_present }}
+{% if auth_info.ldap_present %}
+LDAP Configuration (excerpt):
+{% for line in auth_info.ldap_config[:20] %}
+  {{ line }}
+{% endfor %}
+{% if auth_info.ldap_config | length > 20 %}
+  ... ({{ auth_info.ldap_config | length - 20 }} more lines)
+{% endif %}
+{% endif %}
+{% else %}
+Authentication information not available
+{% endif %}
+
+================================================================================
+USER GROUP MEMBERSHIPS
+================================================================================
+{% if user_groups_info is defined %}
+Username: {{ user_groups_info.username }}
+All Groups: {{ user_groups_info.all_groups }}
+Sudo Member: {{ user_groups_info.sudo_member }}
+Wheel Member: {{ user_groups_info.wheel_member }}
+Libvirt Member: {{ user_groups_info.libvirt_member }}
+{% else %}
+User group information not available
+{% endif %}
+
+================================================================================
+KVM VIRTUAL MACHINES
+================================================================================
+{% if kvm_info is defined %}
+Libvirtd Active: {{ kvm_info.libvirtd_active }}
+
+{% if kvm_info.libvirtd_active %}
+VM List:
+{% for line in kvm_info.vm_list %}
+  {{ line }}
+{% endfor %}
+
+{% if kvm_info.vm_names | length > 0 %}
+Detected VMs: {{ kvm_info.vm_names | join(', ') }}
+
+VM Details:
+{% for line in kvm_info.vm_details %}
+  {{ line }}
+{% endfor %}
+{% else %}
+No virtual machines found
+{% endif %}
+{% else %}
+Libvirtd is not running
+{% endif %}
+{% else %}
+KVM information not available
+{% endif %}
+
+================================================================================
+ONEIDENTITY VASTOOL
+================================================================================
+{% if vastool_info is defined %}
+Installed: {{ vastool_info.installed }}
+
+{% if vastool_info.installed %}
+Version:
+{% for line in vastool_info.version %}
+  {{ line }}
+{% endfor %}
+
+Status:
+{% for line in vastool_info.status %}
+  {{ line }}
+{% endfor %}
+
+Domains:
+{% for line in vastool_info.domains %}
+  {{ line }}
+{% endfor %}
+
+License:
+{% for line in vastool_info.license %}
+  {{ line }}
+{% endfor %}
+
+Domain Info:
+{% for line in vastool_info.domain_info %}
+  {{ line }}
+{% endfor %}
+{% else %}
+OneIdentity vastool is not installed
+{% endif %}
+{% else %}
+Vastool information not available
+{% endif %}
+
+================================================================================
+LINBIT STORAGE (DRBD/LINSTOR)
+================================================================================
+{% if linbit_storage_info is defined %}
+DRBD Installed: {{ linbit_storage_info.drbd_installed }}
+{% if linbit_storage_info.drbd_installed %}
+DRBD Version:
+{% for line in linbit_storage_info.drbd_version %}
+  {{ line }}
+{% endfor %}
+
+DRBD Status:
+{% for line in linbit_storage_info.drbd_status %}
+  {{ line }}
+{% endfor %}
+
+DRBD Resources (excerpt):
+{% for line in linbit_storage_info.drbd_resources[:30] %}
+  {{ line }}
+{% endfor %}
+{% if linbit_storage_info.drbd_resources | length > 30 %}
+  ... ({{ linbit_storage_info.drbd_resources | length - 30 }} more lines)
+{% endif %}
+{% endif %}
+
+Linstor Installed: {{ linbit_storage_info.linstor_installed }}
+{% if linbit_storage_info.linstor_installed %}
+Linstor Version:
+{% for line in linbit_storage_info.linstor_version %}
+  {{ line }}
+{% endfor %}
+
+Controller Active: {{ linbit_storage_info.linstor_controller_active }}
+Satellite Active: {{ linbit_storage_info.linstor_satellite_active }}
+
+Linstor Nodes:
+{% for line in linbit_storage_info.linstor_nodes %}
+  {{ line }}
+{% endfor %}
+
+Linstor Resources:
+{% for line in linbit_storage_info.linstor_resources %}
+  {{ line }}
+{% endfor %}
+
+Storage Pools:
+{% for line in linbit_storage_info.linstor_storage_pools %}
+  {{ line }}
+{% endfor %}
+
+Volumes:
+{% for line in linbit_storage_info.linstor_volumes %}
+  {{ line }}
+{% endfor %}
+{% endif %}
+{% else %}
+LINBIT storage information not available
+{% endif %}
+
+================================================================================
+END OF REPORT
+================================================================================

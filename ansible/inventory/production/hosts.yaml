@@ -1,0 +1,53 @@
+---
+# Production Inventory
+# Based on original inventory-file.txt
+
+all:
+  children:
+    cluster_nodes:
+      hosts:
+        node1:
+          ansible_host: 192.168.1.101
+          ansible_user: admin
+        node2:
+          ansible_host: 192.168.1.102
+          ansible_user: admin
+        node3:
+          ansible_host: 192.168.1.103
+          ansible_user: admin
+      vars:
+        # Cluster-specific variables
+        cluster_name: production_cluster
+        ansible_become: true
+        ansible_become_method: sudo
+
+    # Additional groups for better organization
+    kvm_hosts:
+      hosts:
+        node1:
+        node2:
+        node3:
+      vars:
+        libvirt_service: libvirtd
+
+    drbd_nodes:
+      hosts:
+        node1:
+        node2:
+        node3:
+      vars:
+        drbd_service: drbd
+
+    pacemaker_nodes:
+      hosts:
+        node1:
+        node2:
+        node3:
+      vars:
+        pacemaker_service: pacemaker
+        corosync_service: corosync
+
+  vars:
+    # Global variables for all hosts
+    ansible_ssh_private_key_file: ~/.ssh/id_rsa
+    ansible_python_interpreter: /usr/bin/python3

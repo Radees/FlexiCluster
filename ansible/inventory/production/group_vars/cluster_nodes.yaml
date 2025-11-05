@@ -1,0 +1,31 @@
+---
+# Variables specific to cluster nodes
+
+# Cluster configuration
+cluster_name: production_cluster
+cluster_network: 192.168.1.0/24
+
+# PCM/Pacemaker configuration
+pcm_floating_ip: 192.168.1.100
+pcm_floating_ip_cidr: 24
+pcm_network_interface: eth0
+pcm_resource_group_name: floating-ip-group
+
+# Service configurations
+managed_services:
+  - service1
+  - service2
+
+# KVM/Virtualization settings
+libvirt_default_uri: qemu:///system
+vm_storage_pool: default
+vm_network: default
+
+# DRBD configuration
+drbd_protocol: C
+drbd_disk_flushes: true
+drbd_md_flushes: true
+
+# Monitoring and alerting
+monitoring_enabled: true
+alert_email: admin@example.com

@@ -1,0 +1,9 @@
+---
+# Handlers for package installation
+
+- name: restart required services
+  ansible.builtin.service:
+    name: "{{ item }}"
+    state: restarted
+  loop: "{{ ubuntu_packages_services_to_restart }}"
+  when: ubuntu_packages_services_to_restart is defined and ubuntu_packages_services_to_restart | length > 0

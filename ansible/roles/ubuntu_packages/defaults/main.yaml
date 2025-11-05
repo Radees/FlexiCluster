@@ -1,0 +1,25 @@
+---
+# Default variables for ubuntu_packages role
+
+# Package source configuration
+ubuntu_packages_file: "package_list.txt"  # Default file containing package list
+ubuntu_packages_list: []                  # Alternative: specify packages as a list in variables
+
+# Package state and behavior
+ubuntu_packages_state: present            # Package state (present, latest, absent)
+ubuntu_packages_update_cache: true        # Update apt cache before installation
+ubuntu_packages_cache_valid_time: 3600    # Cache validity time in seconds (1 hour)
+
+# Cleanup options
+ubuntu_packages_autoremove: true          # Run apt autoremove after installation
+ubuntu_packages_autoclean: true           # Run apt autoclean after installation
+
+# Performance and reliability
+ubuntu_packages_timeout: 300              # Installation timeout in seconds
+ubuntu_packages_retry_count: 3            # Number of retries on failure
+ubuntu_packages_retry_delay: 5            # Delay between retries in seconds
+ubuntu_packages_parallel_jobs: 2          # Number of parallel jobs for apt
+
+# Advanced configuration
+ubuntu_packages_custom_apt_config: false  # Whether to use custom apt.conf
+ubuntu_packages_services_to_restart: []   # List of services to restart after package installation

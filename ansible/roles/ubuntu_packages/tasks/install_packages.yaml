@@ -1,0 +1,54 @@
+---
+# Package installation tasks
+
+- name: Read package list from file if file is specified
+  ansible.builtin.slurp:
+    src: "{{ role_path }}/files/{{ ubuntu_packages_file }}"
+  register: package_file_content
+  when:
+    - ubuntu_packages_list | length == 0
+    - ubuntu_packages_file is defined
+    - ubuntu_packages_file != ""
+  ignore_errors: true
+
+- name: Parse package list from file
+  ansible.builtin.set_fact:
+    parsed_packages: "{{ (package_file_content['content'] | b64decode).split('\n') |
+                         select('match', '^[^#].*[a-zA-Z0-9]') |
+                         map('trim') |
+                         select('match', '.+') |
+                         list }}"
+  when:
+    - ubuntu_packages_list | length == 0
+    - package_file_content is defined
+    - package_file_content.content is defined
+
+- name: Set final package list
+  ansible.builtin.set_fact:
+    final_packages: "{{ ubuntu_packages_list if ubuntu_packages_list | length > 0 else parsed_packages | default([]) }}"
+
+- name: Display packages to be installed
+  ansible.builtin.debug:
+    msg: "Packages to be installed: {{ final_packages | join(', ') }}"
+  when: final_packages | length > 0
+
+- name: Install packages from the list
+  ansible.builtin.apt:
+    name: "{{ final_packages }}"
+    state: "{{ ubuntu_packages_state }}"
+    update_cache: "{{ ubuntu_packages_update_cache }}"
+    cache_valid_time: "{{ ubuntu_packages_cache_valid_time }}"
+  register: package_install
+  until: package_install is success
+  retries: "{{ ubuntu_packages_retry_count }}"
+  delay: "{{ ubuntu_packages_retry_delay }}"
+  async: "{{ ubuntu_packages_timeout }}"
+  poll: 5
+  when: final_packages | length > 0
+  notify: restart required services
+
+- name: Clean up package cache if configured
+  ansible.builtin.apt:
+    autoclean: "{{ ubuntu_packages_autoclean }}"
+    autoremove: "{{ ubuntu_packages_autoremove }}"
+  when: ubuntu_packages_autoclean | bool or ubuntu_packages_autoremove | bool

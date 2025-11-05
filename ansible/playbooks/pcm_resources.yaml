@@ -1,0 +1,284 @@
+---
+# ============================================================================
+# PCM/Pacemaker Resources Configuration Playbook
+# ============================================================================
+# Description: Configure PCM resources for floating IP and services
+# Purpose: Sets up Pacemaker cluster resources including:
+#          - Floating IP address resource
+#          - Systemd service resources
+#          - Resource groups for colocation
+#          - Constraints and preferences
+#
+# Usage: ansible-playbook playbooks/pcm_resources.yaml
+#        ansible-playbook playbooks/pcm_resources.yaml -e "floating_ip=10.0.0.100"
+#        ansible-playbook playbooks/pcm_resources.yaml --tags verify
+# ============================================================================
+
+- name: Configure PCM resources for floating IP and associated systemd services
+  hosts: "{{ target_hosts | default('pacemaker_nodes') }}"
+  become: true
+  gather_facts: true
+
+  vars:
+    # Core configuration (can be overridden via inventory or -e)
+    floating_ip: "{{ pcm_floating_ip | default('192.168.1.100') }}"
+    floating_ip_cidr: "{{ pcm_floating_ip_cidr | default('24') }}"
+    network_interface: "{{ pcm_network_interface | default('eth0') }}"
+    resource_group_name: "{{ pcm_resource_group_name | default('floating-ip-group') }}"
+
+    # Services to manage
+    service_names: "{{ managed_services | default(['service1', 'service2']) }}"
+
+    # Advanced options
+    enable_stickiness: false
+    resource_stickiness_value: 100
+    preferred_node: ""  # Optional: specify preferred node
+    monitor_interval: "10s"
+    start_timeout: "100s"
+    stop_timeout: "100s"
+
+  pre_tasks:
+    - name: Validate network interface exists
+      ansible.builtin.shell: ip link show {{ network_interface }}
+      register: interface_check
+      changed_when: false
+      ignore_errors: true
+
+    - name: Fail if network interface doesn't exist
+      ansible.builtin.fail:
+        msg: "Network interface {{ network_interface }} does not exist on {{ inventory_hostname }}"
+      when: interface_check.rc != 0
+
+  tasks:
+    # ========================================
+    # Ensure Cluster Software is Installed
+    # ========================================
+    - name: Ensure PCM cluster software is installed
+      tags: [install, prerequisites]
+      ansible.builtin.package:
+        name:
+          - pcs
+          - corosync
+          - pacemaker
+          - resource-agents
+        state: present
+      register: package_install
+      until: package_install is succeeded
+      retries: 3
+      delay: 5
+
+    # ========================================
+    # Ensure Cluster Services are Running
+    # ========================================
+    - name: Ensure cluster services are running
+      tags: [service, prerequisites]
+      block:
+        - name: Start and enable pcsd service
+          ansible.builtin.service:
+            name: pcsd
+            state: started
+            enabled: true
+
+        - name: Start and enable pacemaker service
+          ansible.builtin.service:
+            name: pacemaker
+            state: started
+            enabled: true
+
+        - name: Start and enable corosync service
+          ansible.builtin.service:
+            name: corosync
+            state: started
+            enabled: true
+
+        - name: Wait for cluster to be ready
+          ansible.builtin.command: pcs status
+          register: cluster_status
+          changed_when: false
+          retries: 5
+          delay: 10
+          until: cluster_status.rc == 0
+
+      rescue:
+        - name: Display cluster service error
+          ansible.builtin.debug:
+            msg: "Failed to start cluster services. Check cluster configuration."
+
+        - name: Fail playbook if services can't start
+          ansible.builtin.fail:
+            msg: "Cluster services are not running properly"
+
+    # ========================================
+    # Check Existing Resources
+    # ========================================
+    - name: Check if resource group already exists
+      tags: [check, idempotency]
+      ansible.builtin.shell: pcs resource show {{ resource_group_name }} 2>&1
+      register: group_exists
+      changed_when: false
+      failed_when: false
+      run_once: true
+
+    - name: Set resource creation flag
+      ansible.builtin.set_fact:
+        should_create_resources: "{{ 'error' in group_exists.stdout.lower() or group_exists.rc != 0 }}"
+      run_once: true
+
+    # ========================================
+    # Create Floating IP Resource
+    # ========================================
+    - name: Create floating IP resource
+      tags: [resources, floating-ip]
+      ansible.builtin.command: >
+        pcs resource create floating_ip IPaddr2
+        ip={{ floating_ip }}
+        cidr_netmask={{ floating_ip_cidr }}
+        nic={{ network_interface }}
+        op monitor interval={{ monitor_interval }}
+      register: ip_resource_created
+      when: should_create_resources | bool
+      run_once: true
+      changed_when: ip_resource_created.rc == 0
+      failed_when: ip_resource_created.rc != 0 and 'already exists' not in ip_resource_created.stderr
+
+    # ========================================
+    # Create Service Resources
+    # ========================================
+    - name: Create service resources
+      tags: [resources, services]
+      ansible.builtin.command: >
+        pcs resource create {{ item }}_service systemd:{{ item }}
+        op monitor interval={{ monitor_interval }}
+        op start timeout={{ start_timeout }}
+        op stop timeout={{ stop_timeout }}
+      loop: "{{ service_names }}"
+      when: should_create_resources | bool
+      run_once: true
+      register: service_resources_created
+      changed_when: service_resources_created.rc == 0
+      failed_when: service_resources_created.rc != 0 and 'already exists' not in service_resources_created.stderr
+
+    # ========================================
+    # Create Resource Group
+    # ========================================
+    - name: Create resource group for floating IP and services
+      tags: [resources, group]
+      ansible.builtin.shell: |
+        pcs resource group add {{ resource_group_name }} \
+        floating_ip \
+        {% for service in service_names %}{{ service }}_service {% endfor %}
+      when: should_create_resources | bool
+      run_once: true
+      register: group_created
+      changed_when: group_created.rc == 0
+      failed_when: group_created.rc != 0 and 'already exists' not in group_created.stderr
+
+    # ========================================
+    # Configure Resource Stickiness
+    # ========================================
+    - name: Configure resource stickiness
+      tags: [constraints, stickiness]
+      ansible.builtin.command: >
+        pcs resource meta {{ resource_group_name }}
+        resource-stickiness={{ resource_stickiness_value }}
+      when: enable_stickiness | bool
+      run_once: true
+      register: stickiness_set
+      changed_when: stickiness_set.rc == 0
+
+    # ========================================
+    # Configure Preferred Node
+    # ========================================
+    - name: Configure preferred node constraint
+      tags: [constraints, location]
+      ansible.builtin.command: >
+        pcs constraint location {{ resource_group_name }}
+        prefers {{ preferred_node }}=50
+      when:
+        - preferred_node is defined
+        - preferred_node | length > 0
+      run_once: true
+      register: preferred_node_set
+      changed_when: preferred_node_set.rc == 0
+      failed_when: preferred_node_set.rc != 0 and 'already exists' not in preferred_node_set.stderr
+
+    # ========================================
+    # Verify Resource Status
+    # ========================================
+    - name: Wait for resources to stabilize
+      tags: [verify, always]
+      ansible.builtin.pause:
+        seconds: 15
+      run_once: true
+
+    - name: Verify resource status
+      tags: [verify, always]
+      ansible.builtin.command: pcs status resources
+      register: pcs_status
+      changed_when: false
+      run_once: true
+
+    - name: Display resource status
+      tags: [verify, always]
+      ansible.builtin.debug:
+        msg: "{{ pcs_status.stdout_lines }}"
+      run_once: true
+
+    - name: Get detailed cluster status
+      tags: [verify]
+      ansible.builtin.command: pcs status
+      register: full_cluster_status
+      changed_when: false
+      run_once: true
+
+    - name: Display full cluster status
+      tags: [verify]
+      ansible.builtin.debug:
+        var: full_cluster_status.stdout_lines
+      run_once: true
+
+    # ========================================
+    # Validate Resources are Running
+    # ========================================
+    - name: Check if floating IP is accessible
+      tags: [validate]
+      ansible.builtin.wait_for:
+        host: "{{ floating_ip }}"
+        port: 22
+        timeout: 30
+      delegate_to: localhost
+      run_once: true
+      ignore_errors: true
+
+    - name: Verify services are running on active node
+      tags: [validate]
+      ansible.builtin.shell: |
+        for service in {{ service_names | join(' ') }}; do
+          systemctl is-active $service || echo "$service is not active"
+        done
+      register: service_check
+      changed_when: false
+
+    - name: Display service status
+      tags: [validate]
+      ansible.builtin.debug:
+        var: service_check.stdout_lines
+
+    # ========================================
+    # Summary
+    # ========================================
+    - name: Display configuration summary
+      tags: [always]
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          PCM Resource Configuration Summary
+          ============================================
+          Resource Group: {{ resource_group_name }}
+          Floating IP: {{ floating_ip }}/{{ floating_ip_cidr }}
+          Network Interface: {{ network_interface }}
+          Managed Services: {{ service_names | join(', ') }}
+          Resource Stickiness: {{ 'Enabled (' + resource_stickiness_value|string + ')' if enable_stickiness else 'Disabled' }}
+          Preferred Node: {{ preferred_node if preferred_node else 'None' }}
+          ============================================
+      run_once: true

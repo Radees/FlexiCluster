@@ -1,0 +1,30 @@
+# Ubuntu Package List
+# Lines starting with # are comments and will be ignored
+# One package name per line
+
+# Core utilities
+htop
+tmux
+vim
+curl
+wget
+unzip
+tree
+
+# Monitoring tools
+iotop
+iftop
+sysstat
+nethogs
+
+# Development tools
+build-essential
+git
+python3-pip
+
+# System tools
+net-tools
+lsof
+strace
+
+# Add more packages as needed, one per line

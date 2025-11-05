@@ -1,0 +1,224 @@
+---
+# ============================================================================
+# VM Host Finder Playbook
+# ============================================================================
+# Description: Identifies which server hosts a specific VM
+# Purpose: This playbook identifies which server hosts a specific VM in
+#          running state, or which server has the DRBD disk in Primary
+#          status if VM is not running
+#
+# Usage: ansible-playbook playbooks/vm_finder.yaml -e "vm_name=myvm"
+#        ansible-playbook playbooks/vm_finder.yaml -e "vm_name=myvm target_hosts=cluster_nodes"
+# ============================================================================
+
+- name: Identify VM host and execute tasks on it
+  hosts: "{{ target_hosts | default('cluster_nodes') }}"
+  gather_facts: true
+  become: true
+
+  vars:
+    vm_name: ""  # Required: Set via -e "vm_name=your_vm_name"
+    host_found: false
+    vm_host: ""
+    vm_status: ""
+
+  pre_tasks:
+    - name: Validate required variables
+      ansible.builtin.assert:
+        that:
+          - vm_name is defined
+          - vm_name | length > 0
+        fail_msg: "vm_name must be provided. Use -e 'vm_name=your_vm_name'"
+        success_msg: "Searching for VM: {{ vm_name }}"
+
+  tasks:
+    # ========================================
+    # Initialize Tracking Variables
+    # ========================================
+    - name: Initialize host search variables
+      ansible.builtin.set_fact:
+        host_found: false
+        vm_host: ""
+        vm_status: "not_found"
+      run_once: true
+      delegate_to: localhost
+
+    # ========================================
+    # Check if VM is Running
+    # ========================================
+    - name: Check if VM is running using virsh
+      tags: [virsh, kvm]
+      block:
+        - name: List all VMs on this host
+          ansible.builtin.shell: virsh list --name
+          register: running_vms
+          ignore_errors: true
+          changed_when: false
+
+        - name: Check if our VM is in the list
+          ansible.builtin.shell: virsh list --name | grep -w "{{ vm_name }}"
+          register: virsh_result
+          ignore_errors: true
+          changed_when: false
+
+        - name: Verify VM state - get running status
+          ansible.builtin.command: virsh domstate "{{ vm_name }}"
+          register: domstate_result
+          ignore_errors: true
+          changed_when: false
+          when: virsh_result.rc == 0
+
+        - name: Mark host if VM is running
+          ansible.builtin.set_fact:
+            vm_host: "{{ inventory_hostname }}"
+            host_found: true
+            vm_status: "{{ domstate_result.stdout | trim }}"
+          when:
+            - virsh_result.rc == 0
+            - domstate_result.stdout | trim == 'running'
+
+        - name: Aggregate VM host information
+          ansible.builtin.set_fact:
+            global_vm_host: "{{ vm_host }}"
+            global_host_found: "{{ host_found }}"
+            global_vm_status: "{{ vm_status }}"
+          delegate_to: localhost
+          run_once: true
+          when: host_found | bool
+
+      rescue:
+        - name: Log virsh check failure
+          ansible.builtin.debug:
+            msg: "virsh check failed on {{ inventory_hostname }}"
+
+    # ========================================
+    # Check DRBD if VM Not Found Running
+    # ========================================
+    - name: Check DRBD resources if VM not found running
+      tags: [drbd, storage]
+      block:
+        - name: Check if DRBD device exists
+          ansible.builtin.stat:
+            path: /dev/drbd/by-res/{{ vm_name }}
+          register: drbd_device
+          when: not (global_host_found | default(false))
+
+        - name: Check DRBD disk status
+          ansible.builtin.shell: drbdadm status "{{ vm_name }}" | grep -w "Primary"
+          register: drbd_status
+          ignore_errors: true
+          changed_when: false
+          when:
+            - not (global_host_found | default(false))
+            - drbd_device.stat.exists | default(false)
+
+        - name: Mark host if DRBD disk is in Primary status
+          ansible.builtin.set_fact:
+            vm_host: "{{ inventory_hostname }}"
+            host_found: true
+            vm_status: "drbd_primary"
+          when:
+            - not (global_host_found | default(false))
+            - drbd_device.stat.exists | default(false)
+            - drbd_status.rc == 0
+
+        - name: Update global tracking for DRBD primary
+          ansible.builtin.set_fact:
+            global_vm_host: "{{ vm_host }}"
+            global_host_found: "{{ host_found }}"
+            global_vm_status: "{{ vm_status }}"
+          delegate_to: localhost
+          run_once: true
+          when:
+            - not (global_host_found | default(false))
+            - host_found | bool
+
+      rescue:
+        - name: Log DRBD check failure
+          ansible.builtin.debug:
+            msg: "DRBD check failed on {{ inventory_hostname }}"
+
+    # ========================================
+    # Report Results
+    # ========================================
+    - name: Display host information
+      ansible.builtin.debug:
+        msg: |
+          VM '{{ vm_name }}' found on host: {{ global_vm_host }}
+          Status: {{ global_vm_status }}
+      delegate_to: localhost
+      run_once: true
+      when: global_host_found | default(false) | bool
+
+    - name: Fail if VM host not found
+      ansible.builtin.fail:
+        msg: |
+          Could not find a host for VM '{{ vm_name }}'
+          Searched hosts: {{ ansible_play_hosts | join(', ') }}
+      delegate_to: localhost
+      run_once: true
+      when: not (global_host_found | default(false) | bool)
+
+    # ========================================
+    # Execute Tasks on Identified Host
+    # ========================================
+    - name: Perform tasks on the identified VM host
+      tags: [execute]
+      when:
+        - inventory_hostname == global_vm_host
+        - global_host_found | default(false) | bool
+      block:
+        - name: Get VM information
+          ansible.builtin.command: virsh dominfo "{{ vm_name }}"
+          register: vm_info
+          changed_when: false
+          when: global_vm_status == 'running'
+
+        - name: Display VM info
+          ansible.builtin.debug:
+            var: vm_info.stdout_lines
+          when:
+            - global_vm_status == 'running'
+            - vm_info is defined
+
+        - name: Get DRBD information
+          ansible.builtin.command: drbdadm status "{{ vm_name }}"
+          register: drbd_info
+          changed_when: false
+          ignore_errors: true
+          when: global_vm_status == 'drbd_primary'
+
+        - name: Display DRBD info
+          ansible.builtin.debug:
+            var: drbd_info.stdout_lines
+          when:
+            - global_vm_status == 'drbd_primary'
+            - drbd_info is defined
+
+        # Add more custom tasks here that should run on the identified host
+        # Example:
+        # - name: Backup VM configuration
+        #   ansible.builtin.command: virsh dumpxml "{{ vm_name }}"
+        #   register: vm_config
+
+      rescue:
+        - name: Log task execution failure
+          ansible.builtin.debug:
+            msg: "Failed to execute tasks on {{ inventory_hostname }}"
+
+    # ========================================
+    # Summary
+    # ========================================
+    - name: Display summary
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          VM Finder Summary
+          ============================================
+          VM Name: {{ vm_name }}
+          Found on Host: {{ global_vm_host | default('NOT FOUND') }}
+          VM Status: {{ global_vm_status | default('unknown') }}
+          ============================================
+      delegate_to: localhost
+      run_once: true
+      tags: [always]

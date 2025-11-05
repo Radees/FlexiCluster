@@ -1,0 +1,25 @@
+---
+galaxy_info:
+  role_name: ubuntu_packages
+  author: EPM Team
+  description: Role to install packages from a file list on Ubuntu servers
+  company: Enterprise Package Management
+  license: MIT
+  min_ansible_version: "2.9"
+
+  platforms:
+    - name: Ubuntu
+      versions:
+        - bionic
+        - focal
+        - jammy
+        - noble
+
+  galaxy_tags:
+    - ubuntu
+    - packages
+    - system
+    - apt
+    - package-management
+
+dependencies: []
