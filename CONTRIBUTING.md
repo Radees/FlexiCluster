@@ -1,6 +1,8 @@
-# Contributing to EPM Breadcrumbs
+# Contributing to EPM Infrastructure Management
 
-Thank you for contributing to the EPM Breadcrumbs project! This document outlines the standards and conventions for maintaining consistency across the repository.
+Thank you for contributing to the EPM Infrastructure Management project (`Radees/epm-breadcrumbs`)! This document outlines the standards and conventions for maintaining consistency across the repository.
+
+> **Repository**: This is a unified codebase combining the original epm-breadcrumbs and e-space repositories.
 
 ## Table of Contents
 

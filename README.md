@@ -1,6 +1,8 @@
-# EPM Breadcrumbs
+# EPM Infrastructure Management (epm-breadcrumbs)
 
 A comprehensive Ansible infrastructure management system for Enterprise Package Management (EPM) environments, combining cluster management, virtualization, storage, and monitoring capabilities.
+
+> **Note**: This repository is the result of merging `epm-breadcrumbs` and `e-space` repositories into a unified infrastructure automation platform.
 
 ## Overview
 
@@ -186,11 +188,11 @@ ansible-playbook -i inventory/staging/hosts.yaml playbooks/server_audit.yaml
 
 ## Architecture
 
-This repository integrates content from:
-- **epm-breadcrumbs**: Core EPM scripts and documentation
-- **e-space**: Cluster management roles and configurations
+This repository (`Radees/epm-breadcrumbs`) is a unified infrastructure management system created by merging:
+- **Original epm-breadcrumbs**: Core EPM scripts, testing tools, and documentation
+- **e-space repository**: Comprehensive cluster management roles and configurations
 
-The merger creates a unified infrastructure management system suitable for complex cluster environments.
+The merged codebase provides an integrated platform for managing complex high-availability cluster environments with standardized conventions and best practices.
 
 ## Requirements
 

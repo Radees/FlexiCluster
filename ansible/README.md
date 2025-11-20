@@ -2,6 +2,8 @@
 
 This directory contains Ansible playbooks, roles, and configurations for managing EPM infrastructure, including cluster nodes, virtual machines, and storage systems.
 
+> **Part of**: `Radees/epm-breadcrumbs` - A unified infrastructure management repository combining EPM breadcrumbs and e-space cluster management capabilities.
+
 ## Directory Structure
 
 ```
