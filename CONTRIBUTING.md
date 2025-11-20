@@ -1,8 +1,8 @@
-# Contributing to EPM Infrastructure Management
+# Contributing to FlexiCluster
 
-Thank you for contributing to the EPM Infrastructure Management project (`Radees/epm-breadcrumbs`)! This document outlines the standards and conventions for maintaining consistency across the repository.
+Thank you for contributing to the FlexiCluster project (`Radees/FlexiCluster`)! This document outlines the standards and conventions for maintaining consistency across the repository.
 
-> **Repository**: This is a unified codebase combining the original epm-breadcrumbs and e-space repositories.
+> **Repository**: FlexiCluster is a unified codebase combining the original epm-breadcrumbs and e-space repositories.
 
 ## Table of Contents
 
@@ -15,7 +15,7 @@ Thank you for contributing to the EPM Infrastructure Management project (`Radees
 ## Repository Structure
 
 ```
-epm-breadcrumbs/
+FlexiCluster/
 ├── ansible/                        # Ansible infrastructure code
 │   ├── playbooks/                  # Playbook files
 │   ├── roles/                      # Ansible roles
