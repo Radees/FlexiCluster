@@ -149,6 +149,55 @@ ansible-playbook -i inventory/production/hosts.yaml \
 EOF
 ```
 
+## Roles
+
+The repository includes 13 reusable Ansible roles for comprehensive cluster management:
+
+### Core Infrastructure Roles
+
+| Role | Purpose |
+|------|---------|
+| **cluster_base** | Base cluster configuration, system setup, and user management |
+| **cluster_network** | Network configuration (bonds, VLANs, bridges) |
+| **cluster_monitoring** | Zabbix agent installation and monitoring setup |
+| **cluster_identity** | OneIdentity vastool, Kerberos, SSSD configuration |
+| **cluster_cockpit** | Cockpit web interface setup and configuration |
+
+### Storage & HA Roles
+
+| Role | Purpose |
+|------|---------|
+| **cluster_drbd** | DRBD storage replication setup and configuration |
+| **cluster_linstor** | Linstor distributed storage management |
+| **cluster_storage** | Storage configuration and LVM management |
+| **cluster_pacemaker** | Pacemaker/Corosync HA cluster setup |
+
+### Virtualization Roles
+
+| Role | Purpose |
+|------|---------|
+| **cluster_vm** | KVM/libvirt virtual machine management |
+
+### Package Management Roles
+
+| Role | Purpose |
+|------|---------|
+| **ubuntu_packages** | Ubuntu package installation from file lists |
+
+### Testing Roles
+
+| Role | Purpose |
+|------|---------|
+| **cck-tests** | Cluster configuration and compatibility tests |
+
+Each role follows Ansible best practices with:
+- Pre-installation checks in `tasks/pre_checks.yaml`
+- Installation tasks in `tasks/install.yaml`
+- Configuration tasks in `tasks/configure.yaml`
+- Main orchestration in `tasks/main.yaml`
+- Default variables in `defaults/main.yaml`
+- Handlers in `handlers/main.yaml`
+
 ## Configuration
 
 ### Inventory Management
@@ -183,7 +232,9 @@ Main configuration is in `ansible.cfg`. Key settings:
 
 ## Playbook Details
 
-### server_audit.yaml
+### Core Infrastructure Playbooks
+
+#### server_audit.yaml
 
 Comprehensive server audit checking:
 - Network configuration and connectivity
@@ -197,7 +248,7 @@ Comprehensive server audit checking:
 
 **Output**: Reports saved to `/tmp/server_audit/`
 
-### vm_finder.yaml
+#### vm_finder.yaml
 
 Locates a VM across cluster nodes by:
 1. Checking if VM is running via virsh
@@ -206,7 +257,7 @@ Locates a VM across cluster nodes by:
 
 **Required variable**: `vm_name`
 
-### pcm_resources.yaml
+#### pcm_resources.yaml
 
 Configures Pacemaker cluster resources:
 - Floating IP address (IPaddr2)
@@ -216,7 +267,7 @@ Configures Pacemaker cluster resources:
 
 **Configurable via inventory** or command-line variables.
 
-### oneidentity_linbit_check.yaml
+#### oneidentity_linbit_check.yaml
 
 Performs detailed checks on:
 - **OneIdentity vastool**: version, status, domains, license
@@ -224,6 +275,44 @@ Performs detailed checks on:
 - **Linstor**: nodes, resources, storage pools, volumes
 
 **Output**: Reports saved to `/tmp/vastool_linbit_reports/`
+
+### VM Management Playbooks
+
+#### vm_discovery_playbook.yaml
+
+Discovers and inventories all virtual machines across cluster:
+- Lists all VMs and their current state
+- Identifies VM host locations
+- Generates comprehensive VM reports
+
+#### vm_management.yaml
+
+VM lifecycle management operations:
+- Start/stop VMs
+- Configure VM resources
+- Manage VM state across cluster
+
+#### vm_cdrom_eject.yaml
+
+Manages CD-ROM devices for VMs:
+- Ejects virtual CD-ROM media
+- Updates VM configurations
+
+#### vm_drbd_pcm.yaml
+
+Integrates VMs with DRBD and Pacemaker:
+- Configures VM resources in Pacemaker
+- Sets up DRBD integration for VM storage
+- Manages VM failover scenarios
+
+### Cluster Setup
+
+#### cluster_setup.yaml
+
+Main cluster orchestration playbook that coordinates:
+- Initial cluster configuration
+- Role deployment
+- Service initialization
 
 ## Tags
 
@@ -288,19 +377,24 @@ inventory = ./inventory/staging
    rm -rf /tmp/ansible_facts/*
    ```
 
-## Migration from Old Structure
+## Naming Conventions
 
-The following files have been refactored:
+This repository follows strict naming conventions:
 
-| Old File | New Location |
-|----------|--------------|
-| `ansible-server-audit-playbook.txt` | `playbooks/server_audit.yaml` |
-| `ansible_vm_finder_playbook.txt` | `playbooks/vm_finder.yaml` |
-| `ansible-pcm-playbook.txt` | `playbooks/pcm_resources.yaml` |
-| `ansible-oneidentity-linbit-checks.txt` | `playbooks/oneidentity_linbit_check.yaml` |
-| `inventory-file.txt` | `inventory/production/hosts.yaml` |
-| `ansible-cheatsheet.md` | `docs/ansible-cheatsheet.md` |
-| `ansible-package-role.md` | Implemented as `roles/ubuntu_packages/` |
+- **Playbooks**: Use `snake_case.yaml` format (e.g., `vm_management.yaml`)
+- **Roles**: Use `snake_case` format, prefix cluster roles with `cluster_` (e.g., `cluster_drbd`)
+- **Variables**: Use `snake_case` format (e.g., `floating_ip`)
+- **File Extensions**: Always use `.yaml` (NOT `.yml`)
+
+See [../CONTRIBUTING.md](../CONTRIBUTING.md) for complete coding standards and contribution guidelines.
+
+## Archived Content
+
+Legacy `.txt` playbook drafts and standalone scripts have been moved to:
+- `../docs/archive/original-txt-files/` - Original playbook drafts
+- `../docs/archive/shell-scripts/` - Standalone test scripts
+
+The content has been properly refactored into the current Ansible structure.
 
 ## Support
 
