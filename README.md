@@ -1,6 +1,9 @@
-# EPM Breadcrumbs
+# FlexiCluster
 
 A comprehensive Ansible infrastructure management system for Enterprise Package Management (EPM) environments, combining cluster management, virtualization, storage, and monitoring capabilities.
+
+> **Repository**: `Radees/FlexiCluster` (formerly `epm-breadcrumbs`)
+> **Note**: This repository is the result of merging `epm-breadcrumbs` and `e-space` repositories into a unified infrastructure automation platform.
 
 ## Overview
 
@@ -32,7 +35,7 @@ ansible-playbook playbooks/pcm_resources.yaml
 ## Repository Structure
 
 ```
-epm-breadcrumbs/
+FlexiCluster/
 ├── ansible/                        # Main Ansible infrastructure
 │   ├── playbooks/                  # Playbooks for various operations
 │   ├── roles/                      # Reusable Ansible roles
@@ -186,11 +189,11 @@ ansible-playbook -i inventory/staging/hosts.yaml playbooks/server_audit.yaml
 
 ## Architecture
 
-This repository integrates content from:
-- **epm-breadcrumbs**: Core EPM scripts and documentation
-- **e-space**: Cluster management roles and configurations
+**FlexiCluster** (`Radees/FlexiCluster`) is a unified infrastructure management system created by merging:
+- **Original epm-breadcrumbs**: Core EPM scripts, testing tools, and documentation
+- **e-space repository**: Comprehensive cluster management roles and configurations
 
-The merger creates a unified infrastructure management system suitable for complex cluster environments.
+The merged codebase provides an integrated platform for managing complex high-availability cluster environments with standardized conventions and best practices.
 
 ## Requirements
 
