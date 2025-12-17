@@ -1,0 +1,22 @@
+---
+- name: Deploy VM with DRBD storage in Pacemaker cluster
+  hosts: cluster_nodes
+  become: yes
+  vars:
+    target_vm: "{{ vm_target | default('vm01') }}"
+  tasks:
+    - name: Deploy VM using role
+      include_role:
+        name: vm_drbd_pcm
+      vars:
+        vm_name: "{{ hostvars[target_vm]['vm_name'] }}"
+        vm_memory: "{{ hostvars[target_vm]['vm_memory'] }}"
+        vm_vcpus: "{{ hostvars[target_vm]['vm_vcpus'] }}"
+        vm_drbd_resource: "{{ hostvars[target_vm]['vm_drbd_resource'] }}"
+        vm_storage_size: "{{ hostvars[target_vm]['vm_storage_size'] }}"
+        vm_network_bridge: "{{ hostvars[target_vm]['vm_network_bridge'] }}"
+        vm_preferred_node: "{{ hostvars[target_vm]['vm_preferred_node'] | default(omit) }}"
+        vm_allow_migrate: "{{ hostvars[target_vm]['vm_allow_migrate'] | default(true) }}"
+        vm_enable_stickiness: "{{ hostvars[target_vm]['vm_enable_stickiness'] | default(false) }}"
+        vm_stickiness: "{{ hostvars[target_vm]['vm_stickiness'] | default(100) }}"
+        vm_priority: "{{ hostvars[target_vm]['vm_priority'] | default(100) }}"

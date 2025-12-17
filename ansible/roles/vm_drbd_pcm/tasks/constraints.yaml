@@ -1,0 +1,65 @@
+---
+- name: Create resource group for VM
+  shell: >
+    pcs resource group add {{ vm_name }}-group
+    {{ vm_drbd_resource }}
+    {{ vm_drbd_resource }}-fs
+    {{ vm_name }}
+  register: group_result
+  failed_when:
+    - group_result.rc != 0
+    - "'already exists' not in group_result.stderr"
+  changed_when: "'already exists' not in group_result.stderr"
+  run_once: true
+
+- name: Set DRBD master-slave constraints
+  shell: >
+    pcs resource promotable {{ vm_drbd_resource }}
+    promoted-max=1 promoted-node-max=1 clone-max=2 clone-node-max=1
+    notify=true
+  register: drbd_ms_result
+  failed_when:
+    - drbd_ms_result.rc != 0
+    - "'already exists' not in drbd_ms_result.stderr"
+  changed_when: "'already exists' not in drbd_ms_result.stderr"
+  run_once: true
+
+- name: Create colocation constraint for DRBD and filesystem
+  shell: >
+    pcs constraint colocation add {{ vm_drbd_resource }}-fs
+    with promoted {{ vm_drbd_resource }}-clone INFINITY
+  register: colocation_result
+  failed_when:
+    - colocation_result.rc != 0
+    - "'already constraint' not in colocation_result.stderr"
+  changed_when: "'already constraint' not in colocation_result.stderr"
+  run_once: true
+
+- name: Create order constraint for DRBD promotion and filesystem
+  shell: >
+    pcs constraint order promote {{ vm_drbd_resource }}-clone
+    then start {{ vm_drbd_resource }}-fs
+  register: order_result
+  failed_when:
+    - order_result.rc != 0
+    - "'already constraint' not in order_result.stderr"
+  changed_when: "'already constraint' not in order_result.stderr"
+  run_once: true
+
+- name: Set preferred node for VM
+  shell: >
+    pcs constraint location {{ vm_name }}-group
+    prefers {{ vm_preferred_node }}=50
+  when: vm_preferred_node is defined
+  register: location_result
+  failed_when:
+    - location_result.rc != 0
+    - "'already constraint' not in location_result.stderr"
+  changed_when: "'already constraint' not in location_result.stderr"
+  run_once: true
+
+- name: Configure VM stickiness
+  shell: >
+    pcs resource meta {{ vm_name }} resource-stickiness={{ vm_stickiness | default('100') }}
+  when: vm_enable_stickiness | default(false)
+  run_once: true

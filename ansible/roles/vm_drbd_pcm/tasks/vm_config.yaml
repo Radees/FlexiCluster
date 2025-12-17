@@ -1,0 +1,13 @@
+---
+- name: Create VM storage directory
+  file:
+    path: "/var/lib/libvirt/images/{{ vm_name }}"
+    state: directory
+    mode: '0755'
+
+- name: Generate VM XML configuration
+  template:
+    src: vm_template.xml.j2
+    dest: "/etc/libvirt/qemu/{{ vm_name }}.xml"
+    mode: '0644'
+  notify: restart libvirtd

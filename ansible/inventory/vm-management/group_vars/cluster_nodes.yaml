@@ -1,0 +1,18 @@
+# Common variables for all cluster nodes
+vm_linstor_controller: "{{ ansible_default_ipv4.address }}:3370"
+vm_storage_pool: "thinpool"
+cluster_name: "production-cluster"
+
+# Pacemaker cluster settings
+pcs_cluster_name: "production-cluster"
+pcs_cluster_password: "{{ vault_cluster_password }}"
+
+# DRBD/LINSTOR settings
+linstor_storage_pools:
+  - name: "thinpool"
+    driver: "LVM_THIN"
+    device: "/dev/vg_storage/thin_pool"
+
+# Network settings
+cluster_network: "192.168.1.0/24"
+cluster_multicast_address: "239.255.1.1"

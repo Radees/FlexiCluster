@@ -1,0 +1,39 @@
+---
+# Default variables for the vm_drbd_pcm role
+
+# Package lists
+vm_drbd_packages:
+  - pcs
+  - corosync
+  - pacemaker
+  - libvirt-daemon
+  - libvirt-clients
+  - qemu-kvm
+  - drbd-utils
+  - linstor-client
+  - linstor-satellite
+  - fence-agents-all
+
+vm_drbd_services:
+  - pacemaker
+  - libvirtd
+  - linstor-satellite
+
+# LINSTOR/DRBD defaults
+vm_linstor_controller: "{{ ansible_default_ipv4.address }}:3370"
+vm_storage_pool: "thinpool"
+vm_filesystem_type: "ext4"
+vm_use_linstor: true
+
+# VM defaults
+vm_memory: "2048"
+vm_vcpus: "2"
+vm_network_bridge: "br0"
+vm_allow_migrate: true
+vm_priority: 100
+vm_enable_stickiness: false
+vm_stickiness: 100
+
+# Behavior defaults
+vm_verify_deployment: true
+vm_show_status: true
