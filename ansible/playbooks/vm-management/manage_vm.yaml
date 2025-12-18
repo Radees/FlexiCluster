@@ -1,0 +1,40 @@
+---
+- name: Manage VM resources in Pacemaker
+  hosts: cluster_nodes
+  become: yes
+  vars:
+    target_vm: "{{ vm_target | default('vm01') }}"
+    action: "{{ vm_action | default('status') }}"  # start, stop, restart, migrate, status
+  tasks:
+    - name: Perform VM action
+      shell: |
+        case "{{ action }}" in
+          start)
+            pcs resource enable {{ target_vm }}
+            ;;
+          stop)
+            pcs resource disable {{ target_vm }}
+            ;;
+          restart)
+            pcs resource restart {{ target_vm }}
+            ;;
+          migrate)
+            pcs resource move {{ target_vm }} {{ target_node | default('') }}
+            ;;
+          status)
+            pcs status resources | grep -A5 -B5 {{ target_vm }}
+            ;;
+          cleanup)
+            pcs resource cleanup {{ target_vm }}
+            ;;
+          *)
+            echo "Unknown action: {{ action }}"
+            exit 1
+            ;;
+        esac
+      run_once: true
+      register: vm_action_result
+
+    - name: Display result
+      debug:
+        var: vm_action_result.stdout_lines

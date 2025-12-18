@@ -1,0 +1,27 @@
+vm_name: "vm02"
+vm_memory: "4096"
+vm_vcpus: "4"
+vm_drbd_resource: "vm02-disk"
+vm_storage_size: "50G"
+vm_network_bridge: "br0"
+vm_preferred_node: "node2"
+vm_allow_migrate: true
+vm_enable_stickiness: false
+vm_priority: 90
+
+# Database server specific settings
+vm_filesystem_type: "xfs"
+vm_use_linstor: true
+
+vm_network_config:
+  ip: "192.168.1.102"
+  netmask: "255.255.255.0"
+  gateway: "192.168.1.1"
+  dns: "8.8.8.8"
+
+# Additional disks for database
+vm_additional_storage:
+  - name: "vm02-data"
+    size: "100G"
+    mount_point: "/var/lib/mysql"
+    filesystem: "xfs"

@@ -1,0 +1,9 @@
+# Common variables for all VMs (when they're running)
+ansible_user: ubuntu
+ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+
+# Common VM settings that can be overridden in host_vars
+vm_default_memory: "2048"
+vm_default_vcpus: "2"
+vm_default_network_bridge: "br0"
+vm_default_storage_size: "20G"

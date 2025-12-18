@@ -1,0 +1,32 @@
+---
+- name: Create LINSTOR resource definition
+  shell: >
+    linstor --controllers={{ vm_linstor_controller }}
+    resource-definition create {{ vm_drbd_resource }}
+  register: linstor_rd_result
+  failed_when:
+    - linstor_rd_result.rc != 0
+    - "'already exists' not in linstor_rd_result.stderr"
+  changed_when: "'already exists' not in linstor_rd_result.stderr"
+
+- name: Create LINSTOR volume definition
+  shell: >
+    linstor --controllers={{ vm_linstor_controller }}
+    volume-definition create {{ vm_drbd_resource }} {{ vm_storage_size }}
+  register: linstor_vd_result
+  failed_when:
+    - linstor_vd_result.rc != 0
+    - "'already exists' not in linstor_vd_result.stderr"
+  changed_when: "'already exists' not in linstor_vd_result.stderr"
+
+- name: Deploy LINSTOR resource to cluster nodes
+  shell: >
+    linstor --controllers={{ vm_linstor_controller }}
+    resource create {{ vm_drbd_resource }} {{ item }}
+    --storage-pool={{ vm_storage_pool }}
+  loop: "{{ groups['cluster_nodes'] }}"
+  register: linstor_deploy_result
+  failed_when:
+    - linstor_deploy_result.rc != 0
+    - "'already exists' not in linstor_deploy_result.stderr"
+  changed_when: "'already exists' not in linstor_deploy_result.stderr"

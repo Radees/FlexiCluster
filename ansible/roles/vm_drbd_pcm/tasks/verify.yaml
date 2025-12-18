@@ -1,0 +1,21 @@
+---
+- name: Verify DRBD status
+  shell: drbd-overview
+  register: drbd_status
+  changed_when: false
+
+- name: Verify cluster resource status
+  shell: pcs status resources
+  register: pcs_status
+  changed_when: false
+  run_once: true
+
+- name: Display DRBD status
+  debug:
+    var: drbd_status.stdout_lines
+  when: vm_show_status | default(true)
+
+- name: Display cluster resource status
+  debug:
+    var: pcs_status.stdout_lines
+  when: vm_show_status | default(true)

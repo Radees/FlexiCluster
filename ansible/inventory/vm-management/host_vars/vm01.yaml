@@ -1,0 +1,22 @@
+vm_name: "vm01"
+vm_memory: "2048"
+vm_vcpus: "2"
+vm_drbd_resource: "vm01-disk"
+vm_storage_size: "20G"
+vm_network_bridge: "br0"
+vm_preferred_node: "node1"
+vm_allow_migrate: true
+vm_enable_stickiness: true
+vm_stickiness: 150
+vm_priority: 100
+
+# Optional: Custom VM configuration
+vm_filesystem_type: "ext4"
+vm_use_linstor: true
+
+# Network configuration for the VM (when it's running)
+vm_network_config:
+  ip: "192.168.1.101"
+  netmask: "255.255.255.0"
+  gateway: "192.168.1.1"
+  dns: "8.8.8.8"

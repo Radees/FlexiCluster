@@ -1,0 +1,29 @@
+---
+- name: Ensure cluster and virtualization packages are installed
+  package:
+    name: "{{ vm_drbd_packages }}"
+    state: present
+
+- name: Ensure cluster and virtualization services are running
+  service:
+    name: "{{ item }}"
+    state: started
+    enabled: yes
+  loop: "{{ vm_drbd_services }}"
+
+- name: Include LINSTOR tasks
+  include_tasks: linstor.yaml
+  when: vm_use_linstor | default(true)
+
+- name: Include VM configuration tasks
+  include_tasks: vm_config.yaml
+
+- name: Include Pacemaker resource tasks
+  include_tasks: pacemaker.yaml
+
+- name: Include constraints tasks
+  include_tasks: constraints.yaml
+
+- name: Include verification tasks
+  include_tasks: verify.yaml
+  when: vm_verify_deployment | default(true)

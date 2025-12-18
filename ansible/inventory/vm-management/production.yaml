@@ -1,0 +1,29 @@
+all:
+  children:
+    cluster_nodes:
+      hosts:
+        node1:
+          ansible_host: 192.168.1.10
+          ansible_user: ubuntu
+        node2:
+          ansible_host: 192.168.1.11
+          ansible_user: ubuntu
+      vars:
+        vm_linstor_controller: "192.168.1.10:3370"
+        vm_storage_pool: "thinpool"
+        floating_ip: "192.168.1.100"
+        floating_ip_cidr: "24"
+        network_interface: "eth0"
+
+    virtual_machines:
+      hosts:
+        vm01:
+          ansible_host: 192.168.1.101
+          ansible_user: ubuntu
+          # VM will be managed by cluster, connection through floating IP
+        vm02:
+          ansible_host: 192.168.1.102
+          ansible_user: ubuntu
+        vm03:
+          ansible_host: 192.168.1.103
+          ansible_user: ubuntu

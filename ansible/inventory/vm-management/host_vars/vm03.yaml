@@ -1,0 +1,24 @@
+vm_name: "vm03"
+vm_memory: "8192"
+vm_vcpus: "6"
+vm_drbd_resource: "vm03-disk"
+vm_storage_size: "30G"
+vm_network_bridge: "br0"
+vm_preferred_node: "node1"
+vm_allow_migrate: true
+vm_enable_stickiness: true
+vm_stickiness: 200
+vm_priority: 110
+
+# Web server specific settings
+vm_filesystem_type: "ext4"
+vm_use_linstor: true
+
+vm_network_config:
+  ip: "192.168.1.103"
+  netmask: "255.255.255.0"
+  gateway: "192.168.1.1"
+  dns: "8.8.8.8"
+
+# Custom XML template for special requirements
+vm_custom_template: "web_server_template.xml.j2"

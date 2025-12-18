@@ -1,0 +1,50 @@
+---
+- name: Create DRBD resource in Pacemaker
+  shell: >
+    pcs resource create {{ vm_drbd_resource }} ocf:linbit:drbd
+    drbd_resource={{ vm_drbd_resource }}
+    op monitor interval=60s
+    op start timeout=240s
+    op stop timeout=100s
+  register: drbd_resource_result
+  failed_when:
+    - drbd_resource_result.rc != 0
+    - "'already exists' not in drbd_resource_result.stderr"
+  changed_when: "'already exists' not in drbd_resource_result.stderr"
+  run_once: true
+
+- name: Create DRBD filesystem resource
+  shell: >
+    pcs resource create {{ vm_drbd_resource }}-fs Filesystem
+    device=/dev/drbd/by-res/{{ vm_drbd_resource }}/0
+    directory=/var/lib/libvirt/images/{{ vm_name }}
+    fstype={{ vm_filesystem_type | default('ext4') }}
+    op monitor interval=20s
+    op start timeout=60s
+    op stop timeout=60s
+  register: fs_resource_result
+  failed_when:
+    - fs_resource_result.rc != 0
+    - "'already exists' not in fs_resource_result.stderr"
+  changed_when: "'already exists' not in fs_resource_result.stderr"
+  run_once: true
+
+- name: Create VM resource in Pacemaker
+  shell: >
+    pcs resource create {{ vm_name }} ocf:heartbeat:VirtualDomain
+    config=/etc/libvirt/qemu/{{ vm_name }}.xml
+    hypervisor=qemu:///system
+    migration_transport=ssh
+    op monitor interval=10s timeout=30s
+    op start timeout=90s
+    op stop timeout=90s
+    op migrate_from timeout=60s
+    op migrate_to timeout=120s
+    meta allow-migrate={{ vm_allow_migrate | default('true') }}
+    meta priority={{ vm_priority | default('100') }}
+  register: vm_resource_result
+  failed_when:
+    - vm_resource_result.rc != 0
+    - "'already exists' not in vm_resource_result.stderr"
+  changed_when: "'already exists' not in vm_resource_result.stderr"
+  run_once: true
